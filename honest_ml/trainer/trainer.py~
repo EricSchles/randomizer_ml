@@ -1,0 +1,118 @@
+from sklearn.metrics import classification_report as report
+from sklearn.model_selection import train_test_split
+from sklearn.base import BaseEstimator
+import numpy as np
+
+# need to do this for regression and classification
+class EvaluateModel:
+    def __init__(self,
+                 model_type: str,
+                 model: BaseEstimator,
+                 data: pd.DataFrame,
+                 target: pd.Series,
+                 num_trials: int):
+        if self.model_type not in ["regression", "classification"]:
+            raise Exception("model_type must be regression or classification")
+        self.model_type = model_type
+        self.model = model
+        self.hyperparameters = model.get_params()
+        self.data = data
+        self.target = target
+        self.num_trials = num_trials
+
+    def _get_mask(self, y_train: pd.Series, num_rows: int):
+        mask = np.full(num_rows, False)
+        mask[y_train.index] = True
+        return mask
+    
+    def _fit(self, results, seed, X_train, X_test, y_train, y_test):
+        self.model.fit(X_train, y_train)
+        y_pred = self.model.predict(X_test)
+        if self.model_type == "classification":
+            report_dict = report(y_test, y_pred, output_dict=True)
+        elif self.model_type == "regression":
+            report_dict = self.report(y_test, y_pred)
+        else:
+            raise Exception("model_type must be regression or classification")
+        report_dict["mask"] = self._get_mask(y_train, self.data.shape[0])
+        report_dict["seed"] = seed
+        report_dict["hyperparameters"] = self.hyperparameters
+        results.append(report_dict)
+        return results
+
+    def _get_random_seed(self, seeds):
+        if seeds == []:
+            seed = 0
+        else:
+            seed = seeds[0]
+        while seed in seeds:
+            seed = int(np.random.uniform(0, 1000000))
+        seeds.append(seed)
+        return seed, seeds
+        
+    def fit_random(self, seed_strategy, test_size=0.1):
+        results = []
+        if seed_strategy == "sequential":
+            for seed in num_trials:
+                X_train, X_test, y_train, y_test = train_test_split(
+                    self.data, self.target,
+                    test_size=test_size,
+                    random_state=seed
+                )
+                results = self._fit(
+                    results, seed, X_train, X_test, y_train, y_test
+                )
+        elif seed_strategy == "random":
+            seeds = []
+            for _ in num_trials:
+                seed, seeds = self._get_random_seed(seeds)
+                X_train, X_test, y_train, y_test = train_test_split(
+                    self.data, self.target,
+                    test_size=test_size,
+                    random_state=seed
+                )
+                results = self._fit(
+                    results, seed, X_train, X_test, y_train, y_test
+                )
+        else:
+            raise Exception("Unknown seed strategy.")
+        return results
+
+    def _get_sequential_mask(self, num_rows: int, pivot: int):
+        first = np.full(pivot, True)
+        remainder = num_rows - pivot
+        second = np.full(remainder, False)
+        return np.concatenate([first, second])
+
+    def _mask_split(self, train_mask):
+        test_mask = ~train_mask
+        X_train = self.data[train_mask]
+        X_test = self.data[test_mask]
+        y_train = self.target[train_mask]
+        y_test = self.target[test_mask]
+        return (
+            X_train, X_test,
+            y_train, y_test
+        )
+
+    def fit_sequential(self):
+        results = []
+        num_rows = self.data.shape[0]
+        if num_rows < 20:
+            raise Exception("Cannot do sequential fit with less than 20 data points")
+        first_ten_percent = int(num_rows * 0.1)
+        last_ten_percent = int(num_rows * 0.9)
+        seed = None
+        for pivot in range(first_ten_percent, last_ten_percent):
+            train_mask = self._get_sequential_mask(data.shape[0], pivot)
+            X_train, X_test, y_train, y_test = self._mask_split(train_mask)
+            results = self._fit(
+                results, seed, X_train, X_test, y_train, y_test
+            )
+        return results            
+
+    #for prediction we would ensemble across the random seeds
+    # w/ same hyperparameters
+    def predict(self):
+        pass
+
