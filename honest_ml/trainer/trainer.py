@@ -6,6 +6,8 @@ from sklearn.base import clone
 import numpy as np
 from multiprocessing import cpu_count
 import concurrent.futures
+import pandas as pd
+import numpy as np
 
 def get_random_seed(seeds):
     if seeds == []:
@@ -169,7 +171,7 @@ class BaseTrainer:
         seeds = []
         model_instances = []
         for seed in range(num_trials):
-.            if seed_strategy == "random":
+            if seed_strategy == "random":
                 seed, seeds = get_random_seed(seeds)
                 model_instances.append(
                     self._fit(
