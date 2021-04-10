@@ -8,6 +8,7 @@ from multiprocessing import cpu_count
 import concurrent.futures
 import pandas as pd
 import numpy as np
+import operator
 
 def get_random_seed(seeds):
     if seeds == []:
@@ -173,11 +174,11 @@ class BaseTrainer:
         for seed in range(num_trials):
             if seed_strategy == "random":
                 seed, seeds = get_random_seed(seeds)
-                model_instances.append(
-                    self._fit(
-                        seed, test_size, X, y
-                    )
+            model_instances.append(
+                self._fit(
+                    seed, test_size, X, y
                 )
+            )
         return model_instances
         
     def fit(self, X, y, num_trials, test_size, seed_strategy="random", training="parallel"):
@@ -272,7 +273,12 @@ class ClassificationTrainer(BaseTrainer):
                 predictions.append(
                     model.predict(X)
                 )
-            return mode(predictions)
+            final_predictions = []
+            for elem in np.array(predictions).T:
+                final_predictions.append(
+                    mode(elem)
+                )
+            return np.array(final_predictions)
         elif ensemble == "top_k_pecent":
             model_instances = sorted(
                 self.model_instances,
