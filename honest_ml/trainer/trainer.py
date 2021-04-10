@@ -259,6 +259,14 @@ class ClassificationTrainer(BaseTrainer):
             )
         ]
 
+    def _transpose_predictions(self, predictions):
+        final_predictions = []
+        for elem in np.array(predictions).T:
+            final_predictions.append(
+                mode(elem)
+            )
+        return np.array(final_predictions)
+        
     def predict(self, X, k=0.9, accuracy="f1-score", ensemble="all"):
         """
         ensemble options:
@@ -273,12 +281,7 @@ class ClassificationTrainer(BaseTrainer):
                 predictions.append(
                     model.predict(X)
                 )
-            final_predictions = []
-            for elem in np.array(predictions).T:
-                final_predictions.append(
-                    mode(elem)
-                )
-            return np.array(final_predictions)
+            return self._transpose_predictions(predictions)
         elif ensemble == "top_k_pecent":
             model_instances = sorted(
                 self.model_instances,
@@ -290,8 +293,7 @@ class ClassificationTrainer(BaseTrainer):
                 predictions.append(
                     model.predict(X)
                 )
-            return mode(predictions)
-            
+            return self._transpose_predictions(predictions)
         elif ensemble == "k_best_minority_class":
             minority_class = str(get_minority_class(self.y))
             model_instances = sorted(
@@ -304,4 +306,4 @@ class ClassificationTrainer(BaseTrainer):
                 predictions.append(
                     model.predict(X)
                 )
-            return mode(predictions)
+            return self._transpose_predictions(predictions)
