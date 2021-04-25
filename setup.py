@@ -24,7 +24,7 @@ setup(
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
     ],
-    packages=["honest_ml", 'honest_ml.trainer'],
+    packages=["honest_ml", 'honest_ml.trainer', 'honest_ml.visualizer'],
     include_package_data=True,
     install_requires=["sklearn", "scipy", "numpy",
                       "statsmodels", "mlxtend", "pytest"],
