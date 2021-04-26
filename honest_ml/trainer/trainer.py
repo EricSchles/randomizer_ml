@@ -52,7 +52,7 @@ class EvaluateModel:
                  data: pd.DataFrame,
                  target: pd.Series,
                  num_trials: int):
-        if self.model_type not in ["regression", "classification"]:
+        if model_type not in ["regression", "classification"]:
             raise Exception("model_type must be regression or classification")
         self.model_type = model_type
         self.model = model
@@ -91,7 +91,7 @@ class EvaluateModel:
     def fit_random(self, seed_strategy, test_size=0.1):
         results = []
         if seed_strategy == "sequential":
-            for seed in num_trials:
+            for seed in range(self.num_trials):
                 X_train, X_test, y_train, y_test = train_test_split(
                     self.data, self.target,
                     test_size=test_size,
@@ -102,7 +102,7 @@ class EvaluateModel:
                 )
         elif seed_strategy == "random":
             seeds = []
-            for _ in num_trials:
+            for _ in range(self.num_trials):
                 seed, seeds = get_random_seed(seeds)
                 X_train, X_test, y_train, y_test = train_test_split(
                     self.data, self.target,
