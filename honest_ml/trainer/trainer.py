@@ -85,6 +85,8 @@ class EvaluateModel:
         report_dict["mask"] = self._get_mask(y_train, self.data.shape[0])
         report_dict["seed"] = seed
         report_dict["hyperparameters"] = self.hyperparameters
+        if "coef_" in dir(self.model):
+            report_dict['coef'] = self.model.coef_
         results.append(report_dict)
         return results
         
