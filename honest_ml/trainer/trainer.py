@@ -89,6 +89,12 @@ class EvaluateModel:
             report_dict['coef'] = self.model.coef_
         results.append(report_dict)
         return results
+
+    def is_valid_split(self, y_train, y_test):
+        return (
+            self.target.unique() == y_train.unique() and
+            self.target.unique() == y_test.unique()
+        )
         
     def fit_random(self, seed_strategy, test_size=0.1):
         results = []
@@ -99,6 +105,8 @@ class EvaluateModel:
                     test_size=test_size,
                     random_state=seed
                 )
+                if not self.is_valid_split(y_train, y_test):
+                    continue
                 results = self._fit(
                     results, seed, X_train, X_test, y_train, y_test
                 )
@@ -111,6 +119,8 @@ class EvaluateModel:
                     test_size=test_size,
                     random_state=seed
                 )
+                if not self.is_valid_split(y_train, y_test):
+                    continue
                 results = self._fit(
                     results, seed, X_train, X_test, y_train, y_test
                 )
@@ -140,6 +150,8 @@ class EvaluateModel:
         for pivot in range(first_ten_percent, last_ten_percent):
             train_mask = get_sequential_mask(data.shape[0], pivot)
             X_train, X_test, y_train, y_test = self._mask_split(train_mask)
+            if not self.is_valid_split(y_train, y_test):
+                continue
             results = self._fit(
                 results, seed, X_train, X_test, y_train, y_test
             )
@@ -151,7 +163,7 @@ class BaseTrainer:
         self.hyperparameters = self.model.get_params()
         self.fit_models = []
         self.model_instances = None
-                
+
     def _fit_parallel(self, X, y, test_size, num_trials, seed_strategy):
         num_cpus = cpu_count()
         with concurrent.futures.ProcessPoolExecutor(num_cpus) as pool:
@@ -207,7 +219,6 @@ class RegressionTrainer(BaseTrainer):
         model_instance = clone(self.model)
         model_instance.fit(X_train, y_train)
         y_pred = model_instance.predict(X_test)
-
         return [
             model_instance,
             metrics.mean_squared_error(
@@ -243,7 +254,6 @@ class RegressionTrainer(BaseTrainer):
             
 
 class ClassificationTrainer(BaseTrainer):
-
     def _fit(self, seed, test_size, X, y):
         X_train, X_test, y_train, y_test = train_test_split(
             X, y,

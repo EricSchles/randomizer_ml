@@ -29,7 +29,7 @@ class Visualizer:
             coefs[coef] = []
         for run in metrics:
             for coef in run['coef']:
-                for index in range(len(coef)):
+                for index in range(len(coef_names)):
                     key = coef_names[index]
                     coefs[key].append(coef[index])
         return coefs
