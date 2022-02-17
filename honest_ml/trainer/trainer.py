@@ -92,8 +92,8 @@ class EvaluateModel:
 
     def is_valid_split(self, y_train, y_test):
         return (
-            self.target.unique() == y_train.unique() and
-            self.target.unique() == y_test.unique()
+            (self.target.unique() == y_train.unique()).all() and
+            (self.target.unique() == y_test.unique()).all()
         )
         
     def fit_random(self, seed_strategy, test_size=0.1):
