@@ -1,19 +1,19 @@
 import matplotlib.pyplot as plt
 
 class Visualizer:
-    def __init__(self, metrics, model_type, coef_names=[]):
-        self.metrics = metrics
+    def __init__(self, model_instances, model_type, coef_names=[]):
+        self.model_instances = model_instances
         self.model_type = model_type
         self.regression_metrics = [
             "mse", "max_error", "mae"
         ]
-        if 'coef' in list(metrics[0].keys()):
-            self.coefs = self._get_coefs(metrics, coef_names)
+        if 'coef' in list(model_instances[0].keys()):
+            self.coefs = self._get_coefs(model_instances, coef_names)
         else:
             self.coefs = None
 
         if model_type == "classification":
-            classes = list(metrics[0].keys())
+            classes = list(model_instances[0].keys())
             classes.remove("accuracy")
             classes.remove("mask")
             classes.remove("seed")
@@ -23,11 +23,11 @@ class Visualizer:
             self.classification_metrics = [
                 "precision", "recall", "f1-score", "support"
             ]
-    def _get_coefs(self, metrics, coef_names):
+    def _get_coefs(self, model_instances, coef_names):
         coefs = {}.fromkeys(coef_names)
         for coef in coefs:
             coefs[coef] = []
-        for run in metrics:
+        for run in model_instances:
             for coef in run['coef']:
                 for index in range(len(coef_names)):
                     key = coef_names[index]
@@ -45,7 +45,7 @@ class Visualizer:
             
     def visualize_regression(self, **kwargs):
         for metric in self.regression_metrics:
-            metrics = [metrics[metric] for metrics in self.metrics]
+            metrics = [model_instance[metric] for model_instance in self.model_instances]
             plt.hist(metrics, **kwargs)
             plt.xlabel(metric)
             plt.ylabel("magnitude")
@@ -54,7 +54,10 @@ class Visualizer:
     def visualize_classification(self, **kwargs):
         for _class in self.classes:
             for metric in self.classification_metrics:
-                metrics = [metrics[_class][metric] for metrics in self.metrics]
+                metrics = [
+                    model_instance[_class][metric]
+                    for model_instance in self.model_instances
+                ]
                 plt.hist(metrics, **kwargs)
                 plt.xlabel(metric)
                 plt.ylabel("magnitude")

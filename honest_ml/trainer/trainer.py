@@ -1,7 +1,9 @@
 from sklearn import metrics
+from sklearn.pipeline import Pipeline
 from sklearn.metrics import classification_report as report
 from sklearn.model_selection import train_test_split
 from sklearn.base import BaseEstimator
+from sklearn.linear_model import LogisticRegression
 from sklearn.base import clone
 import numpy as np
 from multiprocessing import cpu_count
@@ -56,6 +58,8 @@ class EvaluateModel:
             raise Exception("model_type must be regression or classification")
         self.model_type = model_type
         self.model = model
+        if self.is_pipeline():
+            self.check_model_name()
         self.hyperparameters = model.get_params()
         self.data = data
         self.target = target
@@ -66,6 +70,16 @@ class EvaluateModel:
         mask[y_train.index] = True
         return mask
 
+    def is_pipeline(self):
+        dummy_pipeline = Pipeline(steps=[
+            ('dummy regressor', LogisticRegression())
+        ])
+        return type(self.model) == type(dummy_pipeline)
+
+    def check_model_name(self):
+        if 'model' != list(self.model.named_steps.keys())[-1]:
+            raise Exception("model must be named 'model' in the pipeline")
+    
     def report(self, y_test, y_pred):
         return {
             "mse": metrics.mean_squared_error(y_test, y_pred),
@@ -85,8 +99,12 @@ class EvaluateModel:
         report_dict["mask"] = self._get_mask(y_train, self.data.shape[0])
         report_dict["seed"] = seed
         report_dict["hyperparameters"] = self.hyperparameters
-        if "coef_" in dir(self.model):
-            report_dict['coef'] = self.model.coef_
+        if self.is_pipeline():
+            if 'coef_' in dir(self.model.named_steps['model']):
+                report_dict['coef'] = self.model.named_steps['model'].coef_
+        else:
+            if "coef_" in dir(self.model):
+                report_dict['coef'] = self.model.coef_
         results.append(report_dict)
         return results
 
