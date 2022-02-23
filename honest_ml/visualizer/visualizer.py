@@ -1,4 +1,6 @@
 import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sns
 
 class Visualizer:
     def __init__(self, model_instances, model_type, coef_names=[]):
@@ -66,3 +68,24 @@ class Visualizer:
                 else:
                     plt.title(f"class {_class}")
                 plt.show()
+
+    def visualize_confusion_matrix(self, **kwargs):
+        for _class in self.classes:
+            precision = [
+                model_instance[_class]["precision"]
+                for model_instance in self.model_instances
+            ]
+            recall = [
+                model_instance[_class]["recall"]
+                for model_instance in self.model_instances
+            ]
+            _data = pd.DataFrame()
+            _data[f"precision_class_{_class}"] = precision
+            _data[f"recall_class_{_class}"] = recall
+            sns.jointplot(
+                data=_data,
+                x=f"precision_class_{_class}",
+                y=f"recall_class_{_class}"
+            )
+            plt.show()
+            
