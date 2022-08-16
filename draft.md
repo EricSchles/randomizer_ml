@@ -8,7 +8,7 @@ Machine learning metrics are built around the idea of training a model and then 
 
 ## Introduction
 
-The idea of out of sample prediction is described in detail throughout the literature[1], the basic idea is to split the data into two groups, a training sample and a testing sample.  Once the data is split then a statistical model is trained on the training sample.  Then the trained model is used to predict the dependent variable from the independent variables[4] in the testing sample. Finally, a loss metric, like mean squared error[2] is used if it is a regression problem or cross entropy[3] is used if it's classification, to compare the predicted dependent variable against the ground truth dependent variable.  
+The idea of out of sample prediction is described in detail throughout the literature[1], the basic idea is to split the data into two groups, a training sample and a testing sample.  Once the data is split then a statistical model is trained on the training sample.  Then the trained model is used to predict the independent variable from the dependent variables[4] in the testing sample. Finally, a loss metric, like mean squared error[2] is used if it is a regression problem or cross entropy[3] is used if it's classification, to compare the predicted dependent variable against the ground truth dependent variable.  
 
 This method can be useful as a first pass to assess model quality, however it has many deficiencies[5]#To Do add more references here#.  Since we only split the data once and we are dealing with a classification problem, we must hope for a few things:
 
