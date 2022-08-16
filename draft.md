@@ -14,7 +14,7 @@ This method can be useful as a first pass to assess model quality, however it ha
 
 1. We don't get a substantially different balance in the label classes in training and testing.  And that this balance is not different from the total data set, as well as, the population data in question.
 
-2. We don't get a concentration of indepedent variables that are caused by a specific exogenous effect[6] in the training data and a different exogenous effect in the testing data.  
+2. We don't get a concentration of independent variables that are caused by a specific exogenous effect[6] in the training data and a different exogenous effect in the testing data.  
 
 If either of these conditions fail then our loss metric may record either a far too optimistic or pessimistic view of how well the model does.  This in turn may have consequences for a whole host of things - failure to select the correct model, for instance, we may select a logistic regression model[7] when a decision tree model[8] is more approriate.  Or we may select the wrong hyperparameters for a given model class.  A direct consequence of a bad model is poor inference which may have difficult or impossible to recognize consequences, in some cases`[9][10][11][12]`.  Therefore it is of paramount importance that our models be 'honest' and the error well captured.  
 
