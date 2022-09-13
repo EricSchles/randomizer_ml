@@ -136,6 +136,18 @@ Example::
 
 Additionally, notice the seed_strategy can be set to "random" or "sequential".  If it is set to random, then seeds are randomly selected from a random number generator.  Otherwise each seed is set sequentially from 0 up to the number of trials for each run.
 
+Here the regressor also has a predict method::
+
+	regressor.predict(X)
+
+The predict method ensembles all the model instances and then takes the mean of all their predictions.  Additionally, you can ensemble just the top k models by with the following::
+	
+	regressor.predict(
+		X, 
+		k=0.1, 
+		ensemble="top_k_percent"
+	)
+
 ClassificationTrainer
 =====================
 
@@ -160,11 +172,11 @@ Just as there is a regression specific trainer, there is a classification specif
 	y = pd.Series(y)
 	num_trials = 200
 
-	classifier = RegressionTrainer(clf)
+	classifier = ClassificationTrainer(clf)
 	model_instances = classifier.fit(
 		X, y, num_trials, test_size, 
 		seed_strategy="random",
 		training="parallel"
 	)
 
-As you can see the API is essentially equivalent.
+As you can see the API is essentially equivalent.  The ClassificationTrainer also comes with a predict method that functions in the same way as the RegressionTrainer.  
