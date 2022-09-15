@@ -20,17 +20,17 @@ affiliations:
       index: 1
     - name: The City University of New York, USA
       index: 2
-    - name: Michigan Technological University
+    - name: Michigan Technological University, USA
       index: 3
 date: 16 September 2022
 bibiliography: paper.bib
 ---
 
-# 1.Summary
+# Summary
 
 Machine learning metrics are built around the idea of training a model and then making out-of-sample predictions to test generalizability. There are a few standard methods; splitting the data into training and testing data and then predicting once on the testing or out of sample data. Using cross-validation to train on partitions of the data and then test by using one partition as the holdout and averaging the metric across all partitions. And finally, stratified partitioning splits the data subject to some condition, usually on the proportion of labels in the entire dataset. This paper will look at a library that implements a different method, training the model on many train-test splits and recording the out-of-sample error across these five hundred to more than a thousand splits. This creates higher confidence in the model and more closely simulates the likely scenarios you would find in the production setting, even with reasonably small datasets. Through this library, users can present statistical models based on confidence intervals to capture the uncertainty in inferences instead of point statistics for different machine learning models.
 
-# 2.Introduction
+# Introduction
 
 The idea of out-of-sample prediction is described in detail throughout the literature [@Montgomery:1991]. The basic idea is to split the data into two groups, a training sample and a testing sample. Once the data is split, a statistical model is trained on the training sample. Then the trained model is used to predict the independent variable from the dependent variables [@Kuhn:2013; @Pawluszek-Filipiak:2020] in the testing sample. Finally, a loss metric, like mean squared error, is used if it is a regression problem, or cross-entropy [@Bickel:2015; @James:2021] is used for classification to compare the predicted dependent variable against the ground truth dependent variable. This method can be helpful as a first pass to assess model quality; however, it has many deficiencies [@Doan:2022; @Salazar:2022; @Tan:2021] since the data was only split once considering a classification problem, there may be issues such as:
 
@@ -43,27 +43,21 @@ To deal with this failure to generalize from a single training and testing split
 
 In theory, these methods described are inherently good approaches; the issues raised come down to how models are viewed and interpreted in practice. Therefore,  [honest\_ml](https://github.com/EricSchles/honest_ml) is a library to do many individual data splits, typically on the order of 500 to several thousand data splits. The idea is to iterate over the random seed used in a typical train-test split implementation. For this library, we use scikit-learn's implementation [@Buitinck:2013; @Pedregosa:2011], considered the gold standard by machine learning engineers. Doing so removes the need to consider how many partitions are required for a particular dataset. We also further decrease the possibility of a "lucky or unlucky" split in a train-test split. In addition, this implementation helps to identify the sensitivity of trained models to the data used in training the models with specific hyperparameters.
 
-# 3.Utilization
+# Utilization
 
-[honest\_ml](https://github.com/EricSchles/honest_ml) has an EvaluateModel class that allows users to pass in their classifier of choice, a target data set, a feature data set and the number of trials where each data split during a trial uses a different random seed. The relevant performance metrics are calculated for each train-test split. For example, in Figure 1, users can create an object of EvaluateModel. The performance metrics for each trial are saved after fitting the model.
+[honest\_ml](https://github.com/EricSchles/honest_ml) has an EvaluateModel class that allows users to pass in their classifier of choice, a target data set, a feature data set and the number of trials where each data split during a trial uses a different random seed. The relevant performance metrics are calculated for each train-test split. For example, in \autoref{fig:Figure 1}, users can create an object of EvaluateModel. The performance metrics for each trial are saved after fitting the model.
 
-![](RackMultipart20220915-1-erje6c_html_646ed6569b43cba5.png)
-
-_Figure 1. Sample code for using the EvaluateModel class in honest\_ml_
+![Using the EvaluateModel class in honest_ml.\label{fig:Figure 1}](https://github.com/ZachJon1/honest_ml/blob/main/paper1/Figure1.jpg)
 
 The [honest\_ml](https://github.com/EricSchles/honest_ml) library also have a visualization tool that allows users to view results of each trial relative to other trials stored in a user defined variable using the EvaluateModel class.
 
 For example, using the model\_instances created above in the logistic regression model, users can compare metrics such as the precision, recall and f1-score for classification models. Figure 2 and Figure 3 shows the distribution of the precision and recall for 200 trials of the logistic regression model with two classes 0 and 1. Models that produce less normal distributions indicate a sensitivity of the model to the training data and provides users with a realistic expectation of the model in production than a point statistic would provide.
 
-![](RackMultipart20220915-1-erje6c_html_e95300b08451126.png)
+![Comparison of the distribution of the precision and recall for different trials for the class 0\label{fig: Figure 2}](https://github.com/ZachJon1/honest_ml/blob/main/paper1/Figure2.jpg)
 
-_Figure 2. Comparison of the distribution of the precision and recall for different trials for the class 0_
+![Sensitivity of class 1 to different trials using recall and precision distribution\label{fig: Figure 3}](https://github.com/ZachJon1/honest_ml/blob/main/paper1/Figure3.jpg)
 
-![](RackMultipart20220915-1-erje6c_html_6fd2ab5f2df4e95d.png)
-
-_Figure 3. Sensitivity of class 1 to different trials using recall and precision distribution_
-
-# 4.References
+# References
 
 Arlot, S., & Celisse, A. (2010). A survey of cross-validation procedures for model selection. _Statistics surveys_, _4_(none), 40-79. [https://doi.org/10.1214/09-SS054](https://doi.org/10.1214/09-SS054)
 
