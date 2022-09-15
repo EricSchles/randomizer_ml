@@ -2,8 +2,10 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
+import os
+
 class Visualizer:
-    def __init__(self, model_instances, model_type, coef_names=[]):
+    def __init__(self, model_instances, model_type, output_dir=None, coef_names=[]):
         self.model_instances = model_instances
         self.model_type = model_type
         self.regression_metrics = [
@@ -25,6 +27,11 @@ class Visualizer:
             self.classification_metrics = [
                 "precision", "recall", "f1-score", "support"
             ]
+        if output_dir:
+            if not os.path.exists(output_dir):
+                os.mkdir(output_dir)
+        self.output_dir = output_dir
+        
     def _get_coefs(self, model_instances, coef_names):
         coefs = {}.fromkeys(coef_names)
         for coef in coefs:
@@ -36,7 +43,7 @@ class Visualizer:
                     coefs[key].append(coef[index])
         return coefs
 
-    def visualize_coeficients(self, **kwargs):
+    def visualize_coeficients(self, save_plots=False, **kwargs):
         if self.coefs:
             for coeficient_name in self.coefs:
                 coef = self.coefs[coeficient_name]
@@ -44,16 +51,27 @@ class Visualizer:
                 plt.xlabel(coeficient_name)
                 plt.ylabel("magnitude")
                 plt.show()
+                if save_plots:
+                    if self.output_dir:
+                        plt.savefig(self.output_dir+str(coeficient_name)+".png", format='eps')
+                    else:
+                        plt.savefig(str(coeficient_name)+".png", format='eps')
             
-    def visualize_regression(self, **kwargs):
+    def visualize_regression(self, save_plots=False, **kwargs):
         for metric in self.regression_metrics:
             metrics = [model_instance[metric] for model_instance in self.model_instances]
             plt.hist(metrics, **kwargs)
             plt.xlabel(metric)
             plt.ylabel("magnitude")
             plt.show()
+            if save_plots:
+                if self.output_dir:
+                    plt.savefig(self.output_dir+metric+".png", format='eps')
+                else:
+                    plt.savefig(metric+".png", format='eps')
 
-    def visualize_classification(self, **kwargs):
+
+    def visualize_classification(self, save_plots=False, **kwargs):
         for _class in self.classes:
             for metric in self.classification_metrics:
                 metrics = [
@@ -68,8 +86,14 @@ class Visualizer:
                 else:
                     plt.title(f"class {_class}")
                 plt.show()
+                if save_plots:
+                    if self.output_dir:
+                        plt.savefig(self.output_dir+metric+".png", format='eps')
+                    else:
+                        plt.savefig(metric+".png", format='eps')
 
-    def visualize_confusion_matrix(self, **kwargs):
+
+    def visualize_confusion_matrix(self, save_plots=False, **kwargs):
         for _class in self.classes:
             precision = [
                 model_instance[_class]["precision"]
@@ -88,4 +112,10 @@ class Visualizer:
                 y=f"recall_class_{_class}"
             )
             plt.show()
+            if save_plots:
+                if self.output_dir:
+                    plt.savefig(self.output_dir+str(_class)+".png", format='eps')
+                else:
+                    plt.savefig(str(_class)+".png", format='eps')
+
             
