@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+import sys
 
 import os
 
@@ -43,35 +44,39 @@ class Visualizer:
                     coefs[key].append(coef[index])
         return coefs
 
-    def visualize_coeficients(self, save_plots=False, **kwargs):
+    def visualize_coeficients(self, save_plots=False, formating=None, **kwargs):
         if self.coefs:
             for coeficient_name in self.coefs:
                 coef = self.coefs[coeficient_name]
                 plt.hist(coef, **kwargs)
                 plt.xlabel(coeficient_name)
                 plt.ylabel("magnitude")
-                plt.show()
                 if save_plots:
+                    if formating is None:
+                        formating = "png"
                     if self.output_dir:
-                        plt.savefig(self.output_dir+str(coeficient_name)+".png", format='eps')
+                        plt.savefig(self.output_dir+str(coeficient_name)+"."+formating, format=formating)
                     else:
-                        plt.savefig(str(coeficient_name)+".png", format='eps')
+                        plt.savefig(str(coeficient_name)+"."+formating, format=formating)
+                plt.show()
             
-    def visualize_regression(self, save_plots=False, **kwargs):
+    def visualize_regression(self, save_plots=False, formating=None, **kwargs):
         for metric in self.regression_metrics:
             metrics = [model_instance[metric] for model_instance in self.model_instances]
             plt.hist(metrics, **kwargs)
             plt.xlabel(metric)
             plt.ylabel("magnitude")
-            plt.show()
             if save_plots:
+                if formating is None:
+                    formating = "png"
                 if self.output_dir:
-                    plt.savefig(self.output_dir+metric+".png", format='eps')
+                    plt.savefig(self.output_dir+metric+"."+formating, format=formating)
                 else:
-                    plt.savefig(metric+".png", format='eps')
+                    plt.savefig(metric+"."+formating, format=formating)
+            plt.show()
 
 
-    def visualize_classification(self, save_plots=False, **kwargs):
+    def visualize_classification(self, save_plots=False, formating=None, **kwargs):
         for _class in self.classes:
             for metric in self.classification_metrics:
                 metrics = [
@@ -85,15 +90,17 @@ class Visualizer:
                     plt.title(_class)
                 else:
                     plt.title(f"class {_class}")
-                plt.show()
                 if save_plots:
+                    if formating is None:
+                        formating = "png"
                     if self.output_dir:
-                        plt.savefig(self.output_dir+metric+".png", format='eps')
+                        plt.savefig(self.output_dir+"class "+str(_class)+metric+"."+formating, format=formating)
                     else:
-                        plt.savefig(metric+".png", format='eps')
+                        plt.savefig("class "+str(_class)+metric+"."+formating, format=formating)
+                plt.show()
 
 
-    def visualize_confusion_matrix(self, save_plots=False, **kwargs):
+    def visualize_confusion_matrix(self, save_plots=False, formating=None, **kwargs):
         for _class in self.classes:
             precision = [
                 model_instance[_class]["precision"]
@@ -111,11 +118,13 @@ class Visualizer:
                 x=f"precision_class_{_class}",
                 y=f"recall_class_{_class}"
             )
-            plt.show()
             if save_plots:
+                if formating is None:
+                    formating = "png"
                 if self.output_dir:
-                    plt.savefig(self.output_dir+str(_class)+".png", format='eps')
+                    plt.savefig(self.output_dir+str(_class)+"."+formating, format=formating)
                 else:
-                    plt.savefig(str(_class)+".png", format='eps')
+                    plt.savefig(str(_class)+"."+formating, format=formating)
+            plt.show()
 
             
