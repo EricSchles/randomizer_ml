@@ -44,7 +44,7 @@ class Visualizer:
                     coefs[key].append(coef[index])
         return coefs
 
-    def visualize_coeficients(self, save_plots=False, formating=None, **kwargs):
+    def visualize_coeficients(self, show_plot=True, save_plots=False, formatting=None, **kwargs):
         if self.coefs:
             for coeficient_name in self.coefs:
                 coef = self.coefs[coeficient_name]
@@ -52,31 +52,33 @@ class Visualizer:
                 plt.xlabel(coeficient_name)
                 plt.ylabel("magnitude")
                 if save_plots:
-                    if formating is None:
-                        formating = "png"
+                    if formatting is None:
+                        formatting = "png"
                     if self.output_dir:
-                        plt.savefig(self.output_dir+str(coeficient_name)+"."+formating, format=formating)
+                        plt.savefig(self.output_dir+str(coeficient_name)+"."+formatting, format=formatting)
                     else:
-                        plt.savefig(str(coeficient_name)+"."+formating, format=formating)
-                plt.show()
+                        plt.savefig(str(coeficient_name)+"."+formatting, format=formatting)
+                if show_plot:
+                    plt.show()
             
-    def visualize_regression(self, save_plots=False, formating=None, **kwargs):
+    def visualize_regression(self, show_plot=True, save_plots=False, formatting=None, **kwargs):
         for metric in self.regression_metrics:
             metrics = [model_instance[metric] for model_instance in self.model_instances]
             plt.hist(metrics, **kwargs)
             plt.xlabel(metric)
             plt.ylabel("magnitude")
             if save_plots:
-                if formating is None:
-                    formating = "png"
+                if formatting is None:
+                    formatting = "png"
                 if self.output_dir:
-                    plt.savefig(self.output_dir+metric+"."+formating, format=formating)
+                    plt.savefig(self.output_dir+metric+"."+formatting, format=formatting)
                 else:
-                    plt.savefig(metric+"."+formating, format=formating)
-            plt.show()
+                    plt.savefig(metric+"."+formatting, format=formatting)
+            if show_plot:
+                plt.show()
 
 
-    def visualize_classification(self, save_plots=False, formating=None, **kwargs):
+    def visualize_classification(self, show_plot=True, save_plots=False, formatting=None, **kwargs):
         for _class in self.classes:
             for metric in self.classification_metrics:
                 metrics = [
@@ -91,16 +93,17 @@ class Visualizer:
                 else:
                     plt.title(f"class {_class}")
                 if save_plots:
-                    if formating is None:
-                        formating = "png"
+                    if formatting is None:
+                        formatting = "png"
                     if self.output_dir:
-                        plt.savefig(self.output_dir+"class "+str(_class)+metric+"."+formating, format=formating)
+                        plt.savefig(self.output_dir+"class "+str(_class)+metric+"."+formatting, format=formatting)
                     else:
-                        plt.savefig("class "+str(_class)+metric+"."+formating, format=formating)
-                plt.show()
+                        plt.savefig("class "+str(_class)+metric+"."+formatting, format=formatting)
+                if show_plot:
+                    plt.show()
 
 
-    def visualize_confusion_matrix(self, save_plots=False, formating=None, **kwargs):
+    def visualize_confusion_matrix(self, show_plot=True, save_plots=False, formatting=None, **kwargs):
         for _class in self.classes:
             precision = [
                 model_instance[_class]["precision"]
@@ -119,12 +122,13 @@ class Visualizer:
                 y=f"recall_class_{_class}"
             )
             if save_plots:
-                if formating is None:
-                    formating = "png"
+                if formatting is None:
+                    formatting = "png"
                 if self.output_dir:
-                    plt.savefig(self.output_dir+str(_class)+"."+formating, format=formating)
+                    plt.savefig(self.output_dir+str(_class)+"."+formatting, format=formatting)
                 else:
-                    plt.savefig(str(_class)+"."+formating, format=formating)
-            plt.show()
+                    plt.savefig(str(_class)+"."+formatting, format=formatting)
+            if show_plot:
+                plt.show()
 
             

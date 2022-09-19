@@ -10,7 +10,7 @@ README = (HERE / "README.md").read_text()
 # This call to setup() does all the work
 setup(
     name="honest_ml",
-    version="0.8.3",
+    version="0.9.0",
     description="Training for models conforming to the scikit-learn api",
     long_description=README,
     long_description_content_type="text/markdown",
@@ -23,8 +23,15 @@ setup(
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
     ],
-    packages=["honest_ml", 'honest_ml.trainer', 'honest_ml.visualizer'],
+    packages=[
+        "honest_ml",
+        'honest_ml.trainer',
+        'honest_ml.visualizer',
+        'honest_ml.experiment',
+        'honest_ml.utils'
+    ],
     include_package_data=True,
     install_requires=["sklearn", "scipy", "numpy",
                       "statsmodels", "mlxtend", "pytest", "seaborn"],

@@ -120,7 +120,7 @@ class EvaluateModel:
             (target_classes == test_classes)
         )
         
-    def fit_random(self, seed_strategy, test_size=0.1):
+    def fit_random(self, seed_strategy, test_size=0.1, seeds_tried=[]):
         results = []
         if seed_strategy == "sequential":
             for seed in range(self.num_trials):
@@ -135,7 +135,7 @@ class EvaluateModel:
                     results, seed, X_train, X_test, y_train, y_test
                 )
         elif seed_strategy == "random":
-            seeds = []
+            seeds = [] + seeds_tried
             for _ in range(self.num_trials):
                 seed, seeds = get_random_seed(seeds)
                 X_train, X_test, y_train, y_test = train_test_split(
