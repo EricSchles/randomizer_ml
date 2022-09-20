@@ -1,6 +1,6 @@
 from sklearn import metrics
 from sklearn.pipeline import Pipeline
-from sklearn.metrics import classification_report as report
+from sklearn.metrics import classification_report
 from sklearn.model_selection import train_test_split
 from sklearn.base import BaseEstimator
 from sklearn.linear_model import LogisticRegression
@@ -53,7 +53,8 @@ class EvaluateModel:
                  model: BaseEstimator,
                  data: pd.DataFrame,
                  target: pd.Series,
-                 num_trials: int):
+                 num_trials: int,
+                 metrics: dict = {}):
         if model_type not in ["regression", "classification"]:
             raise Exception("model_type must be regression or classification")
         self.model_type = model_type
@@ -64,6 +65,7 @@ class EvaluateModel:
         self.data = data
         self.target = target
         self.num_trials = num_trials
+        self.metrics = metrics
 
     def _get_mask(self, y_train: pd.Series, num_rows: int):
         mask = np.full(num_rows, False)
@@ -79,8 +81,23 @@ class EvaluateModel:
     def check_model_name(self):
         if 'model' != list(self.model.named_steps.keys())[-1]:
             raise Exception("model must be named 'model' in the pipeline")
-    
+
+    def custom_report(self, y_test, y_pred):
+        return {
+            metric_name: metric(y_test, y_pred)
+            for (metric_name, metric) in self.metrics.items()
+        }
+            
     def report(self, y_test, y_pred):
+        if self.metrics:
+            report_dict = self.custom_report(y_test, y_pred)
+        if self.model_type == "classification":
+            report_dict = classification_report(y_test, y_pred, output_dict=True)
+        elif self.model_type == "regression":
+            report_dict = self.regression_report(y_test, y_pred)
+        return report_dict
+            
+    def regression_report(self, y_test, y_pred):
         return {
             "mse": metrics.mean_squared_error(y_test, y_pred),
             "max_error": metrics.max_error(y_test, y_pred),
@@ -90,12 +107,7 @@ class EvaluateModel:
     def _fit(self, results, seed, X_train, X_test, y_train, y_test):
         self.model.fit(X_train, y_train)
         y_pred = self.model.predict(X_test)
-        if self.model_type == "classification":
-            report_dict = report(y_test, y_pred, output_dict=True)
-        elif self.model_type == "regression":
-            report_dict = self.report(y_test, y_pred)
-        else:
-            raise Exception("model_type must be regression or classification")
+        report_dict = self.report(y_test, y_pred)
         report_dict["mask"] = self._get_mask(y_train, self.data.shape[0])
         report_dict["seed"] = seed
         report_dict["hyperparameters"] = self.hyperparameters
@@ -109,16 +121,19 @@ class EvaluateModel:
         return results
 
     def is_valid_split(self, y_train, y_test):
-        target_classes = self.target.unique()
-        target_classes = sorted(target_classes)
-        train_classes = y_train.unique()
-        train_classes = sorted(train_classes)
-        test_classes = y_test.unique()
-        test_classes = sorted(test_classes)
-        return (
-            (target_classes == train_classes) and
-            (target_classes == test_classes)
-        )
+        if self.model_type == "classification":
+            target_classes = self.target.unique()
+            target_classes = sorted(target_classes)
+            train_classes = y_train.unique()
+            train_classes = sorted(train_classes)
+            test_classes = y_test.unique()
+            test_classes = sorted(test_classes)
+            return (
+                (target_classes == train_classes) and
+                (target_classes == test_classes)
+            )
+        else:
+            return True
         
     def fit_random(self, seed_strategy, test_size=0.1, seeds_tried=[]):
         results = []
@@ -234,7 +249,7 @@ class BaseTrainer:
 
 class RegressionTrainer(BaseTrainer):
 
-    def _fit(self, seed, test_size, X, y):
+    def _fit(self, seed, test_size, X, y, metric=None):
         X_train, X_test, y_train, y_test = train_test_split(
             X, y,
             test_size=test_size,
@@ -243,12 +258,19 @@ class RegressionTrainer(BaseTrainer):
         model_instance = clone(self.model)
         model_instance.fit(X_train, y_train)
         y_pred = model_instance.predict(X_test)
-        return [
-            model_instance,
-            metrics.mean_squared_error(
-                y_pred, y_test
-            )
-        ]
+        if metric is None:
+            return [
+                model_instance,
+                metrics.mean_squared_error(
+                    y_test, y_pred
+                )
+            ]
+        else:
+            return [
+                model_instance,
+                metric(y_test, y_pred)
+            ]
+
 
     def predict(self, X, k=0.1, ensemble="all"):
         """
@@ -278,7 +300,7 @@ class RegressionTrainer(BaseTrainer):
             
 
 class ClassificationTrainer(BaseTrainer):
-    def _fit(self, seed, test_size, X, y):
+    def _fit(self, seed, test_size, X, y, metric=None):
         X_train, X_test, y_train, y_test = train_test_split(
             X, y,
             test_size=test_size,
@@ -288,12 +310,19 @@ class ClassificationTrainer(BaseTrainer):
         model_instance.fit(X_train, y_train)
         y_pred = model_instance.predict(X_test)
         self.y = y
-        return [
-            model_instance,
-            report(
-                y_pred, y_test, output_dict=True
-            )
-        ]
+        if metric is None:
+            return [
+                model_instance,
+                classification_report(
+                    y_pred, y_test, output_dict=True
+                )
+            ]
+        else:
+            return [
+                model_instance,
+                metric(y_test, y_pred)
+            ]
+
 
     def _transpose_predictions(self, predictions):
         final_predictions = []
