@@ -171,6 +171,7 @@ Just as there is a regression specific trainer, there is a classification specif
 	X = pd.DataFrame(X)
 	y = pd.Series(y)
 	num_trials = 200
+	test_size = 200
 
 	classifier = ClassificationTrainer(clf)
 	model_instances = classifier.fit(
