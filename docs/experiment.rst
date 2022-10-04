@@ -43,7 +43,6 @@ Here is an example using Experiment with a toy classification problem::
 	    experiment.log_num_trials(num_trials)
 
 
-
 	viz = Visualizer(
 	    model_instances, 
 	    "classification", 

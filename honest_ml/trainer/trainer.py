@@ -4,6 +4,17 @@ from sklearn.metrics import classification_report
 from sklearn.model_selection import train_test_split
 from sklearn.base import BaseEstimator
 from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model._linear_loss import LinearModelLoss
+from sklearn._loss.loss import (
+    HalfGammaLoss,
+    HalfPoissonLoss,
+    HalfSquaredError,
+    HalfTweedieLoss,
+    HalfTweedieLossIdentity,
+    HalfBinomialLoss,
+    HalfMultinomialLoss
+)
+
 from sklearn.base import clone
 import numpy as np
 from multiprocessing import cpu_count
@@ -46,7 +57,6 @@ def get_minority_class(array):
     counts = get_counts(array)
     return min(counts.item(), key=operator.itemgetter(1))[0]
 
-# need to do this for regression and classification
 class EvaluateModel:
     def __init__(self,
                  model_type: str,
@@ -248,7 +258,6 @@ class BaseTrainer:
 
 
 class RegressionTrainer(BaseTrainer):
-
     def _fit(self, seed, test_size, X, y, metric=None):
         X_train, X_test, y_train, y_test = train_test_split(
             X, y,
@@ -372,3 +381,100 @@ class ClassificationTrainer(BaseTrainer):
                     model.predict(X)
                 )
             return self._transpose_predictions(predictions)
+
+class BaseGradientBoosting:
+    def __init__(self, model):
+        self.model = model
+        self.hyperparameters = self.model.get_params()
+        self.fit_models = []
+        self.model_instances = None
+
+    def _fit_sequential(self, X, y, test_size, num_trials, seed_strategy):
+        seeds = []
+        model_instances = []
+        for seed in range(num_trials):
+            if seed_strategy == "random":
+                seed, seeds = get_random_seed(seeds)
+            seeds.append(seed)
+        
+        return self._fit(
+            seeds, test_size, X, y
+        )
+        
+    def fit(self, X, y, num_trials, test_size, seed_strategy="random"):
+        model_instances = self._fit_sequential(
+            X, y, test_size, num_trials, seed_strategy
+        )
+        self.model_instances = model_instances
+        return model_instances
+
+
+class GradientBoostingRegressor(BaseGradientBoosting):
+    loss_lookup = {
+        "LinearRegression": LinearModelLoss
+    }
+    
+    def _fit(
+            self,
+            seeds, test_size,
+            X, y,
+            out_of_bag_metric=metrics.mean_squared_error,
+            learning_rate=1e-3,
+            base_loss=None,
+            fit_intercept=None,
+            sample_weight=None,
+            l2_reg_strength=0
+    ):
+        self.model_instances = []
+        self.out_of_bag_metrics = []
+        self.fit_models = []
+        residuals = y
+        model_instances = []
+        for seed in seeds:
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, residuals,
+                test_size=test_size,
+                random_state=seed
+            )
+            model_instance = clone(self.model)
+            model_instance.fit(X_train, y_train)
+            self.fit_models.append(
+                model_instance
+            )
+            class_name = str(self.model.__class__)
+            if class_name.startswith("sklearn"):
+                model_name = class_name.split(".")[-1]
+                
+            LossModel = self.loss_lookup[model_name]
+            loss_model = LossModel(
+                base_loss=base_loss,
+                fit_intercept=fit_intercept
+            )
+            loss, gradient = loss_model.loss_gradient(
+                model_instance.coef, X_train, y_train,
+                sample_weight=sample_weight,
+                l2_reg_strength=l2_reg_strength
+            )
+            y_pred = model_instance.predict(X_test)
+            out_of_bag_error = out_of_bag_metric(y_test, y_pred)
+            self.out_of_bag_metrics.append(
+                out_of_bag_error
+            )
+            y_pred = model_instance.predict(X_train)
+            residuals = y_pred - (learning_rate * gradient * loss)
+            model_instances.append({
+                "model_name": model_name,
+                "seed": seed,
+                "gradient": gradient,
+                "loss": loss,
+                "out_of_bag_error": out_of_bag_error,
+                "coef": model_instance.coef,
+                "model_instance": model_instance,
+                "learning_rate": learning_rate,
+                "fit_intercept": fit_intercept,
+                "l2_reg_strength": l2_reg_strength,
+                "out_of_bag_metric": out_of_bag_metric,
+                "sample_weight": sample_weight
+            })
+        return model_instances
+

@@ -12,6 +12,7 @@ Welcome to Honest ML's documentation!
    introduction
    trainer
    visualizer
+   experiment
 
 Indices and tables
 ==================
