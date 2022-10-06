@@ -383,31 +383,69 @@ class ClassificationTrainer(BaseTrainer):
             return self._transpose_predictions(predictions)
 
 class BaseGradientBoosting:
-    def __init__(self, model):
+    def __init__(self, model, model_name):
         self.model = model
+        self.model_name = model_name
         self.hyperparameters = self.model.get_params()
         self.fit_models = []
         self.model_instances = None
 
-    def _fit_sequential(self, X, y, test_size, num_trials, seed_strategy):
+    def _fit_sequential(
+            self,
+            X, y,
+            test_size,
+            num_trials,
+            seed_strategy,
+            out_of_bag_metric,
+            learning_rate,
+            base_loss,
+            fit_intercept,
+            sample_weight,
+            l2_reg_strength
+    ):
         seeds = []
-        model_instances = []
         for seed in range(num_trials):
             if seed_strategy == "random":
                 seed, seeds = get_random_seed(seeds)
             seeds.append(seed)
         
         return self._fit(
-            seeds, test_size, X, y
+            self.model_name,
+            seeds, test_size,
+            X, y,
+            out_of_bag_metric,
+            learning_rate,
+            base_loss,
+            fit_intercept,
+            sample_weight,
+            l2_reg_strength
         )
         
-    def fit(self, X, y, num_trials, test_size, seed_strategy="random"):
+    def fit(self,
+            X, y,
+            num_trials,
+            test_size,
+            out_of_bag_metric=metrics.mean_squared_error,
+            learning_rate=1e-3,
+            base_loss=None,
+            fit_intercept=True,
+            sample_weight=None,
+            l2_reg_strength=0,
+            seed_strategy="random"):
         model_instances = self._fit_sequential(
-            X, y, test_size, num_trials, seed_strategy
+            X, y, test_size, num_trials, seed_strategy,
+            out_of_bag_metric, learning_rate,
+            base_loss, fit_intercept,
+            sample_weight, l2_reg_strength
         )
         self.model_instances = model_instances
         return model_instances
 
+    def predict(self, X):
+        return sum([
+            model_instance["model_instance"].predict(X)
+            for model_instance in self.model_instances
+        ])
 
 class GradientBoostingRegressor(BaseGradientBoosting):
     loss_lookup = {
@@ -416,14 +454,15 @@ class GradientBoostingRegressor(BaseGradientBoosting):
     
     def _fit(
             self,
+            model_name,
             seeds, test_size,
             X, y,
-            out_of_bag_metric=metrics.mean_squared_error,
-            learning_rate=1e-3,
-            base_loss=None,
-            fit_intercept=None,
-            sample_weight=None,
-            l2_reg_strength=0
+            out_of_bag_metric,
+            learning_rate,
+            base_loss,
+            fit_intercept,
+            sample_weight,
+            l2_reg_strength
     ):
         self.model_instances = []
         self.out_of_bag_metrics = []
@@ -441,34 +480,46 @@ class GradientBoostingRegressor(BaseGradientBoosting):
             self.fit_models.append(
                 model_instance
             )
-            class_name = str(self.model.__class__)
-            if class_name.startswith("sklearn"):
-                model_name = class_name.split(".")[-1]
+
+            if base_loss is not None:
+                # This method doesn't work yet, it also explicitly calculates
+                # the gradient subject to the loss of the model, instead of just
+                # taking the derivative of mean squared error implicitly, which
+                # seems to be standard practice.
+                LossModel = self.loss_lookup[model_name]
+                loss_model = LossModel(
+                    base_loss=base_loss,
+                    fit_intercept=fit_intercept
+                )
+                #import code
+                #code.interact(local=locals())
+                loss, gradient = loss_model.loss_gradient(
+                    model_instance.coef_, X_train, y_train,
+                    sample_weight=sample_weight,
+                    l2_reg_strength=l2_reg_strength
+                )
+                y_pred = model_instance.predict(X_test)
+                out_of_bag_error = out_of_bag_metric(y_test, y_pred)
+                self.out_of_bag_metrics.append(
+                    out_of_bag_error
+                )
+                y_pred = model_instance.predict(X_train)
+                residuals = y_pred - (learning_rate * gradient * loss)
+            else:
+                y_pred = model_instance.predict(X_test)
+                out_of_bag_error = out_of_bag_metric(y_test, y_pred)
+                self.out_of_bag_metrics.append(
+                    out_of_bag_error
+                )
+                residuals = y - learning_rate * model_instance.predict(X)
                 
-            LossModel = self.loss_lookup[model_name]
-            loss_model = LossModel(
-                base_loss=base_loss,
-                fit_intercept=fit_intercept
-            )
-            loss, gradient = loss_model.loss_gradient(
-                model_instance.coef, X_train, y_train,
-                sample_weight=sample_weight,
-                l2_reg_strength=l2_reg_strength
-            )
-            y_pred = model_instance.predict(X_test)
-            out_of_bag_error = out_of_bag_metric(y_test, y_pred)
-            self.out_of_bag_metrics.append(
-                out_of_bag_error
-            )
-            y_pred = model_instance.predict(X_train)
-            residuals = y_pred - (learning_rate * gradient * loss)
             model_instances.append({
                 "model_name": model_name,
                 "seed": seed,
                 "gradient": gradient,
                 "loss": loss,
                 "out_of_bag_error": out_of_bag_error,
-                "coef": model_instance.coef,
+                "coef": model_instance.coef_,
                 "model_instance": model_instance,
                 "learning_rate": learning_rate,
                 "fit_intercept": fit_intercept,
@@ -477,4 +528,7 @@ class GradientBoostingRegressor(BaseGradientBoosting):
                 "sample_weight": sample_weight
             })
         return model_instances
+
+
+
 
