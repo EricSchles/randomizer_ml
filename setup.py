@@ -10,7 +10,7 @@ README = (HERE / "README.md").read_text()
 # This call to setup() does all the work
 setup(
     name="honest_ml",
-    version="0.9.1",
+    version="0.9.2",
     description="Training for models conforming to the scikit-learn api",
     long_description=README,
     long_description_content_type="text/markdown",
