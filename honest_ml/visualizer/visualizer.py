@@ -23,7 +23,8 @@ class Visualizer:
             classes.remove("mask")
             classes.remove("seed")
             classes.remove("hyperparameters")
-            classes.remove("coef")
+            if "coef" in classes:
+                classes.remove("coef")
             self.classes = classes
             self.classification_metrics = [
                 "precision", "recall", "f1-score", "support"
