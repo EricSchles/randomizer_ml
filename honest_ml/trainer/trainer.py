@@ -632,11 +632,12 @@ class GeneticAlgorithm:
             score_model.append([score, model])
         if isinstance(top_k, float):
             top_k = int(len(population) * top_k)
-        return sorted(
+        score_model = sorted(
             score_model,
             key=lambda t: t[0],
             reverse=higher_is_better
         )[:top_k]
+        return [_model[1] for _model in score_model]
 
     def fuzzer(self, value):
         '''
@@ -689,7 +690,8 @@ class GeneticAlgorithm:
     def crossover_and_mutate(
             self, X, y, test_size, seed, loss, population,
             breeding_rate, mutation_rate,
-            stacking_model_hyperparameters, higher_is_better=True
+            stacking_model_hp,
+            higher_is_better=True
     ):
         '''
         Combine two parents to create new model.
@@ -703,9 +705,17 @@ class GeneticAlgorithm:
         should_breed = [True for _ in range(p)]
         shouldnt_breed = [False for _ in range(q)]
         should_breed += shouldnt_breed
+
+        p = int((mutation_rate) * 10000)
+        q = int((1 - mutation_rate) * 10000)
+        should_mutate = [True for _ in range(p)]
+        shouldnt_mutate = [False for _ in range(q)]
+        should_mutate += shouldnt_mutate
+
         model_pairs = []
-        stacking_model_hyperparameters = tune_hyperparameters(
-            X, y, test_size, seed, loss, hyperparameters,
+        original_stacking_model_hp = self.stacking_initial_hyperparameters
+        new_stacking_model_hp = tune_hyperparameters(
+            X, y, test_size, seed, loss, stacking_model_hp,
             higher_is_better=higher_is_better
         )
 
@@ -719,28 +729,52 @@ class GeneticAlgorithm:
                     )
         if self.problem_type == "regression":
             for model_pair in model_pairs:
-                population.append(
-                    ensemble.StackingRegressor(
-                        estimators=model_pair,
-                        final_estimator=self.stacking_model(
-                            **stacking_model_hyperparameters
-                        ),
-                        passthrough=True
+                if random.choice(should_mutate):
+                    population.append(
+                        ensemble.StackingRegressor(
+                            estimators=model_pair,
+                            final_estimator=self.stacking_model(
+                                **new_stacking_model_hp
+                            ),
+                            passthrough=True
+                        )
                     )
-                )
+                else:
+                    population.append(
+                        ensemble.StackingRegressor(
+                            estimators=model_pair,
+                            final_estimator=self.stacking_model(
+                                **original_stacking_model_hp
+                            ),
+                            passthrough=True
+                        )
+                    )
         if self.problem_type == "classification":
             for model_pair in model_pairs:
-                population.append(
-                    ensemble.StackingClassifier(
-                        estimators=model_pair,
-                        final_estimator=self.stacking_model(
-                            **stacking_model_hyperparameters
-                        ),
-                        passthrough=True
+                if random.choice(should_mutate):
+                    population.append(
+                        ensemble.StackingClassifier(
+                            estimators=model_pair,
+                            final_estimator=self.stacking_model(
+                                **new_stacking_model_hp
+                            ),
+                            passthrough=True
+                        )
                     )
-                )
-
-        return population
+                else:
+                    population.append(
+                        ensemble.StackingClassifier(
+                            estimators=model_pair,
+                            final_estimator=self.stacking_model(
+                                **original_stacking_model_hp
+                            ),
+                            passthrough=True
+                        )
+                    )                    
+        return (
+            population,
+            new_stacking_model_hp
+        )
         
     def is_stacked(self, model):
         model_type = str(type(model))
@@ -790,14 +824,26 @@ class GeneticAlgorithm:
                 )
             
         return population
-
-
     
-    def mutate(population, mutation_rate):
+    def mutate(
+            self,
+            population,
+            mutation_rate,
+            X, y,
+            test_size,
+            seed, loss,
+            higher_is_better=True):
         '''
         Mutate the hyperparameters of individual parents 
-        before combining or the training data or both.
+        before combining.
         '''
+        p = int((mutation_rate) * 10000)
+        q = int((1 - mutation_rate) * 10000)
+        should_mutate = [True for _ in range(p)]
+        shouldnt_mutate = [False for _ in range(q)]
+        should_mutate += shouldnt_mutate
+
+        new_population = []
         for model in population:
             if self.is_stacked(model):
                 hyperparameters = model.get_params()
@@ -805,7 +851,7 @@ class GeneticAlgorithm:
                 for param in hyperparameters:
                     if "final" in param:
                         tunable_hyperparameters[param] = hyperparameters[param]
-                tunable_hyperparameters = tune_hyperparameters(
+                tunable_hyperparameters = self.tune_hyperparameters(
                     X, y,
                     test_size,
                     seed, loss,
@@ -813,9 +859,27 @@ class GeneticAlgorithm:
                     higher_is_better
                 )
                 for param in tunable_hyperparameters:
-                    
+                    hyperparameters[param] = tunable_hyperparameters[param]
+            else:
+                hyperparameters = model.get_params()
+                hyperparameters = self.tune_hyperparameters(
+                    X, y,
+                    test_size,
+                    seed, loss,
+                    hyperparameters,
+                    higher_is_better
+                )
+            model.set_params(**hyperparameters)
+            new_population.append(model)
+        return new_population
+        
 
-    def fit(X, y, strategy="crossover"):
+    def fit(
+            self, X, y, test_size, seed, loss, size_per_model,
+            breeding_rate=0.1, mutation_rate=0.05,
+            number_of_generations=50,
+            strategy="crossover", higher_is_better=True
+    ):
         '''
         Strategies:
         * crossover - only do cross over
@@ -824,7 +888,47 @@ class GeneticAlgorithm:
 
         Steps:
         '''
-        pass
+        population = self.initialize_population(size_per_model)
+        stacking_model_hp = self.stacking_initial_hyperparameters
+        for _ in range(number_of_generations):
+            if strategy == "crossover":
+                population = self.crossover(population, breeding_rate)
+            if strategy == "mutate_crossover":
+                population = self.mutate(
+                    population,
+                    mutation_rate,
+                    X, y,
+                    test_size,
+                    seed, loss,
+                    higher_is_better=higher_is_better
+                )
+                population = self.crossover(population, breeding_rate)
+            if strategy == "mutate_crossover_mutate":
+                population = self.mutate(
+                    population,
+                    mutation_rate,
+                    X, y,
+                    test_size,
+                    seed, loss,
+                    higher_is_better=higher_is_better
+                )
+                population, stacking_model_hp = self.crossover_and_mutate(
+                    self, X, y, test_size, seed,
+                    loss, population,
+                    breeding_rate, mutation_rate,
+                    stacking_model_hp,
+                    higher_is_better=True
+                )
+                
+            population = self.selection(
+                X, y, test_size, seed,
+                population, loss,
+                top_k, higher_is_better=True
+            )
+        return population
+        
+            
 
+# gradient step:
 # look ahead to fit the best marginal model
 # look 'N' ahead to fit the best marginal models.
