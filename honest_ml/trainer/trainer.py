@@ -531,32 +531,6 @@ class GradientBoostingRegressor(BaseGradientBoosting):
             })
         return model_instances
 
-
-class BaseGeneticBoosting(BaseTrainer):
-    def __init__(self, model):
-        self.model = model
-        self.hyperparameters = self.model.get_params()
-        self.fit_models = []
-        self.model_instances = None
-
-    def genetic_fit(self, X, y, test_size, num_trials, seed_strategy):
-        model_instances = self._fit_parallel(
-            X, y, test_size, num_trials, seed_strategy
-        )
-
-    def fit(self, X, y, num_trials, test_size, seed_strategy="random"):
-        self.genetic_fit(
-            X, y, test_size, num_trials, seed_strategy
-        )
-
-        # boosting goes here
-        model_instances = self._fit_sequential(
-            X, y, test_size, num_trials, seed_strategy
-        )
-        
-        self.model_instances = model_instances
-        return model_instances
-
 class GeneticAlgorithm:
     def __init__(
             self,
@@ -874,7 +848,7 @@ class GeneticAlgorithm:
         return new_population
         
 
-    def fit(
+    def get_model_population(
             self, X, y, test_size, seed, loss, size_per_model,
             breeding_rate=0.1, mutation_rate=0.05,
             number_of_generations=50,
@@ -927,7 +901,94 @@ class GeneticAlgorithm:
             )
         return population
         
-            
+class GeneticBoosting(BaseTrainer, GeneticAlgorithm):
+    def __init__(
+            self,
+            models: list,
+            stacking_model,
+            problem_type: str,
+            initial_hyperparameters: list,
+            stacking_initial_hyperparameters: dict
+    ):
+        self.models = models
+        self.stacking_model = stacking_model
+        self.initial_hyperparameters = initial_hyperparameters
+        self.problem_type = problem_type
+        self.stacking_initial_hyperparameters = stacking_initial_hyperparameters
+
+    def _fit_parallel(
+            self,
+            X, y, test_size, seed, loss, size_per_model,
+            breeding_rate, mutation_rate,
+            number_of_generations,
+            strategy, higher_is_better
+    ):
+        num_cpus = cpu_count()
+        with concurrent.futures.ProcessPoolExecutor(num_cpus) as pool:
+            seeds = []
+            futures = []
+            model_instances = []
+            for seed in range(num_trials):
+                if seed_strategy == "random":
+                    seed, seeds = get_random_seed(seeds)
+                future = pool.submit(
+                    self.genetic_fit,
+                    X, y, test_size, seed, loss,
+                    size_per_model, breeding_rate,
+                    mutation_rate,
+                    number_of_generations,
+                    strategy, higher_is_better
+                )
+                futures.append(future)
+            for future in concurrent.futures.as_completed(futures):
+                model_instances.append(future.result())
+        return model_instances
+
+    def genetic_fit(
+            self,
+            X, y, test_size, seed, loss, size_per_model,
+            breeding_rate, mutation_rate,
+            number_of_generations,
+            strategy, higher_is_better
+    ):
+        return self.get_model_population(
+            X, y, test_size, seed, loss,
+            size_per_model,
+            breeding_rate=breeding_rate,
+            mutation_rate=mutation_rate,
+            number_of_generations=number_of_generations,
+            strategy=strategy,
+            higher_is_better=higher_is_better
+        )
+
+
+    def fit(
+            self, X, y,
+            num_trials,
+            test_size,loss,
+            size_per_model,
+            breeding_rate=0.1,
+            mutation_rate=0.05,
+            number_of_generations=50,
+            strategy="crossover",
+            higher_is_better=True
+            seed_strategy="random"
+    ):
+        population = self._fit_parallel(
+            X, y, test_size, seed, loss, size_per_model,
+            breeding_rate, mutation_rate,
+            number_of_generations,
+            strategy, higher_is_better
+        )
+
+        # boosting goes here - pass population to boosting
+        model_instances = self._fit_sequential(
+            X, y, test_size, num_trials, seed_strategy
+        )
+        
+        self.model_instances = model_instances
+        return model_instances
+
 
 # gradient step:
 # look ahead to fit the best marginal model
