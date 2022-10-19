@@ -3,6 +3,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.metrics import classification_report
 from sklearn.model_selection import train_test_split
 from sklearn.base import BaseEstimator
+from sklearn import ensemble
 from sklearn.linear_model import LogisticRegression
 from sklearn.linear_model._linear_loss import LinearModelLoss
 from sklearn._loss.loss import (
@@ -22,6 +23,7 @@ import concurrent.futures
 import pandas as pd
 import numpy as np
 import operator
+import random
 
 def get_random_seed(seeds):
     if seeds == []:
@@ -530,5 +532,299 @@ class GradientBoostingRegressor(BaseGradientBoosting):
         return model_instances
 
 
+class BaseGeneticBoosting(BaseTrainer):
+    def __init__(self, model):
+        self.model = model
+        self.hyperparameters = self.model.get_params()
+        self.fit_models = []
+        self.model_instances = None
+
+    def genetic_fit(self, X, y, test_size, num_trials, seed_strategy):
+        model_instances = self._fit_parallel(
+            X, y, test_size, num_trials, seed_strategy
+        )
+
+    def fit(self, X, y, num_trials, test_size, seed_strategy="random"):
+        self.genetic_fit(
+            X, y, test_size, num_trials, seed_strategy
+        )
+
+        # boosting goes here
+        model_instances = self._fit_sequential(
+            X, y, test_size, num_trials, seed_strategy
+        )
+        
+        self.model_instances = model_instances
+        return model_instances
+
+class GeneticAlgorithm:
+    def __init__(
+            self,
+            models: list,
+            stacking_model,
+            problem_type: str,
+            initial_hyperparameters: list,
+            stacking_initial_hyperparameters: dict
+    ):
+        '''
+        Parameters
+        ----------
+        * models : list - a list of uninitialized models.  
+        Must follow the scikit-learn api.
+        
+        * stacking_model : scikit-learn model to use for stacking.
+        
+        * problem_type : str - regression or classification.
+        Used to determine the stacking model to use.
+                
+        * initial hyperparameters : list of dictionaries.
+        The initial hyperparameters to use for each model type.
+        Passed to each model as Model(**initial_hyperparameters)
+        '''
+        self.models = models
+        self.stacking_model = stacking_model
+        self.initial_hyperparameters = initial_hyperparameters
+        self.problem_type = problem_type
+        self.stacking_initial_hyperparameters = stacking_initial_hyperparameters
+        
+    def initialize_population(self, size_per_model):
+        '''
+        Initialize a random population.
+
+        Parameters
+        ----------
+        * size_per_model : list - the number of models to train,
+        per model type.
+        '''
+        population = []
+        for index, model in enumerate(self.models):
+            for _ in range(size_per_model[index]):
+                population.append(
+                    model(**self.initial_hyperparameters[index])
+                )
+        return population
+    
+    def selection(self, X, y, test_size, seed, population, loss, top_k, higher_is_better=True):
+        '''
+        select k best members of the population for
+        breeding based on loss.
+
+        Parameters
+        ----------
+        * population : list - the population of models to
+        select from.
+        * loss : func - the loss function to use to select models.
+        * top_k : int or float - if int, take the top k models (with 
+        the best score).  If float, take the top percentage of models.
+        if float, must be 0 < x <= 1.0
+        * higher_is_better - bool.  Default is true.  For measures like
+        mean_squared_error, or cross_entropy_loss this is false.  For measures
+        like precision, recall or f1_score this is true.
+        '''
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=test_size, random_state=seed
+        )
+        score_model = []
+        for model in population:
+            model.fit(X_train, y_train)
+            y_pred = model.predict(X_test)
+            score = loss(y_test, y_pred)
+            score_model.append([score, model])
+        if isinstance(top_k, float):
+            top_k = int(len(population) * top_k)
+        return sorted(
+            score_model,
+            key=lambda t: t[0],
+            reverse=higher_is_better
+        )[:top_k]
+
+    def fuzzer(self, value):
+        '''
+        Fuzzes a given parameter value to a 100 random values
+        '''
+        scale = abs(value)
+        new_values = np.random.normal(0, scale * 3, size=100)
+        # ensures the original value is in the array
+        new_values = np.append(0, new_values)
+        return new_values + value
+
+    def tune_hyperparameters(
+            self, X, y, test_size, seed, loss, hyperparameters, higher_is_better
+    ):
+        # consider gradient update for parameters here.
+        new_hyperparameters = {
+            key: hyperparameters[key]
+            for key in hyperparameters
+        }
+
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=test_size, random_state=seed
+        )
+        for param in hyperparameters:
+            value = hyperparameters[param]
+            if isinstance(value, int) or isinstance(value, float):
+                new_values = self.fuzzer(value)
+                losses = []
+                for index, new_value in enumerate(new_values):
+                    new_hyperparameters[param] = new_value
+                    model = self.stacking_model(
+                        **new_hyperparameters
+                    )
+                    model.fit(X_trian, y_train)
+                    y_pred = model.predict(X_test)
+                    losses.append([loss(y_true, y_pred), index])
+                    # do binning on losses, if losses are 'close'
+                    # to original parameter, don't include.
+                losses = sorted(
+                    losses,
+                    key=lambda t: t[0],
+                    reverse=higher_is_better
+                )
+                
+                best_new_value = new_values[losses[0][1]]
+                
+                hyperparameters[param] = best_new_value
+        return hyperparameters
+
+    def crossover_and_mutate(
+            self, X, y, test_size, seed, loss, population,
+            breeding_rate, mutation_rate,
+            stacking_model_hyperparameters, higher_is_better=True
+    ):
+        '''
+        Combine two parents to create new model.
+        This is where model stacking happens.
+        Mutation occurs in the final model, 
+        stacked ontop of the individual models.
+        '''
+        
+        p = int((breeding_rate) * 10000)
+        q = int((1 - breeding_rate) * 10000)
+        should_breed = [True for _ in range(p)]
+        shouldnt_breed = [False for _ in range(q)]
+        should_breed += shouldnt_breed
+        model_pairs = []
+        stacking_model_hyperparameters = tune_hyperparameters(
+            X, y, test_size, seed, loss, hyperparameters,
+            higher_is_better=higher_is_better
+        )
+
+        for index_a, model_a in enumerate(population):
+            for index_b, model_b in enumerate(population):
+                if index_a == index_b:
+                    continue
+                if random.choice(should_breed):
+                    model_pairs.append(
+                        [model_a, model_b]
+                    )
+        if self.problem_type == "regression":
+            for model_pair in model_pairs:
+                population.append(
+                    ensemble.StackingRegressor(
+                        estimators=model_pair,
+                        final_estimator=self.stacking_model(
+                            **stacking_model_hyperparameters
+                        ),
+                        passthrough=True
+                    )
+                )
+        if self.problem_type == "classification":
+            for model_pair in model_pairs:
+                population.append(
+                    ensemble.StackingClassifier(
+                        estimators=model_pair,
+                        final_estimator=self.stacking_model(
+                            **stacking_model_hyperparameters
+                        ),
+                        passthrough=True
+                    )
+                )
+
+        return population
+        
+    def is_stacked(self, model):
+        model_type = str(type(model))
+        return "stacking" in model_type
+
+    def crossover(self, population, breeding_rate):
+        '''
+        Combine two parents to create new model.
+        This is where model stacking happens.
+        '''
+        p = int((breeding_rate) * 10000)
+        q = int((1 - breeding_rate) * 10000)
+        should_breed = [True for _ in range(p)]
+        shouldnt_breed = [False for _ in range(q)]
+        should_breed += shouldnt_breed
+        model_pairs = []
+
+        for index_a, model_a in enumerate(population):
+            for index_b, model_b in enumerate(population):
+                if index_a == index_b:
+                    continue
+                if random.choice(should_breed):
+                    model_pairs.append(
+                        [model_a, model_b]
+                    )
+        if self.problem_type == "regression":
+            for model_pair in model_pairs:
+                population.append(
+                    ensemble.StackingRegressor(
+                        estimators=model_pair,
+                        final_estimator=self.stacking_model(
+                            **self.stacking_initial_hyperparameters
+                        ),
+                        passthrough=True
+                    )
+                )
+        if self.problem_type == "classification":
+            for model_pair in model_pairs:
+                population.append(
+                    ensemble.StackingClassifier(
+                        estimators=model_pair,
+                        final_estimator=self.stacking_model(
+                            **self.stacking_initial_hyperparameters
+                        ),
+                        passthrough=True
+                    )
+                )
+            
+        return population
 
 
+    
+    def mutate(population, mutation_rate):
+        '''
+        Mutate the hyperparameters of individual parents 
+        before combining or the training data or both.
+        '''
+        for model in population:
+            if self.is_stacked(model):
+                hyperparameters = model.get_params()
+                tunable_hyperparameters = {}
+                for param in hyperparameters:
+                    if "final" in param:
+                        tunable_hyperparameters[param] = hyperparameters[param]
+                tunable_hyperparameters = tune_hyperparameters(
+                    X, y,
+                    test_size,
+                    seed, loss,
+                    tunable_hyperparameters,
+                    higher_is_better
+                )
+                for param in tunable_hyperparameters:
+                    
+
+    def fit(X, y, strategy="crossover"):
+        '''
+        Strategies:
+        * crossover - only do cross over
+        * mutate_crossover - mutate parents, then cross over
+        * mutate_crossover_mutate - mutate parents, mutate stacked learner, then cross over.
+
+        Steps:
+        '''
+        pass
+
+# look ahead to fit the best marginal model
+# look 'N' ahead to fit the best marginal models.
