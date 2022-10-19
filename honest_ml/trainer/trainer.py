@@ -623,6 +623,20 @@ class GeneticAlgorithm:
         new_values = np.append(0, new_values)
         return new_values + value
 
+    def loss_is_close(self, loss, y, loss_delta, higher_is_better):
+        loss_min = loss(5, 5)
+        if higher_is_better:
+            assert np.allclose(loss_min, 1)
+        else:
+            assert np.allclose(loss_min, 0)
+        loss_max = loss(1e-5, 1e10)
+        if higher_is_better and np.allclose(loss_max, 0):
+            return (loss_delta < 0.01)
+        elif (not higher_is_better) and (loss_max > 10):
+            return (loss_delta/y.mean() < 1)
+        else:
+            return loss_delta < 0.1
+        
     def tune_hyperparameters(
             self, X, y, test_size, seed, loss, hyperparameters, higher_is_better
     ):
@@ -635,6 +649,10 @@ class GeneticAlgorithm:
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=test_size, random_state=seed
         )
+        original_model = self.stacking_model(**hyperparameters)
+        original_model.fit(X_train, y_train)
+        y_pred = original_model.predict(X_test)
+        original_loss = loss(y_test, y_pred)
         for param in hyperparameters:
             value = hyperparameters[param]
             if isinstance(value, int) or isinstance(value, float):
@@ -647,7 +665,10 @@ class GeneticAlgorithm:
                     )
                     model.fit(X_trian, y_train)
                     y_pred = model.predict(X_test)
-                    losses.append([loss(y_true, y_pred), index])
+                    new_loss = loss(y_true, y_pred)
+                    loss_delta = abs(original_loss - new_loss)
+                    if not self.loss_is_close(loss, y, loss_delta, higher_is_better):
+                        losses.append([new_loss, index])
                     # do binning on losses, if losses are 'close'
                     # to original parameter, don't include.
                 losses = sorted(
