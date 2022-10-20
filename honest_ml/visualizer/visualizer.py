@@ -39,12 +39,17 @@ class Visualizer:
         for coef in coefs:
             coefs[coef] = []
         for run in model_instances:
-            for coef in run['coef']:
-                for index in range(len(coef_names)):
+            if len(run["coef"].shape) == 1:
+                for index, coef in enumerate(run['coef']):
                     key = coef_names[index]
-                    coefs[key].append(coef[index])
+                    coefs[key].append(coef)
+            else:
+                for coef in run['coef']:
+                    for index in range(len(coef_names)):
+                        key = coef_names[index]
+                        coefs[key].append(coef[index])
         return coefs
-
+    
     def visualize_coeficients(self, show_plot=True, save_plots=False, formatting=None, **kwargs):
         if self.coefs:
             for coeficient_name in self.coefs:
