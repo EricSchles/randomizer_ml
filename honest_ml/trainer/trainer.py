@@ -129,6 +129,8 @@ class EvaluateModel:
         else:
             if "coef_" in dir(self.model):
                 report_dict['coef'] = self.model.coef_
+            if "feature_importances_" in dir(self.model):
+                report_dict['coef'] = self.model.feature_importances_
         results.append(report_dict)
         return results
 
