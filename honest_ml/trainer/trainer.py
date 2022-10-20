@@ -992,14 +992,14 @@ class GeneticBoosting(BaseTrainer, GeneticAlgorithm):
             mutation_rate=0.05,
             number_of_generations=50,
             strategy="crossover",
-            higher_is_better=True
+            higher_is_better=True,
             seed_strategy="random"
     ):
         population = self._fit_parallel(
             X, y, test_size, seed, loss, size_per_model,
             breeding_rate, mutation_rate,
             number_of_generations,
-            strategy, higher_is_better
+            strategy, higher_is_better, seed_strategy
         )
 
         # boosting goes here - pass population to boosting
