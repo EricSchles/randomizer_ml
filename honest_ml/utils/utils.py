@@ -93,7 +93,7 @@ class Sampler:
         if method == "poisson":
             new_index = np.random.poisson(
                 lam=4,
-                size=data.shape[0]
+                size=sample_size
             )
             new_index = self.rescale(
                 new_index, data.shape[0]-1
