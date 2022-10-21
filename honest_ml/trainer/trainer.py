@@ -1016,3 +1016,6 @@ class GeneticBoosting(BaseTrainer, GeneticAlgorithm):
 # gradient step:
 # look ahead to fit the best marginal model
 # look 'N' ahead to fit the best marginal models.
+
+# deep stacking by generating synthetic data to train on, this ensures no data leakage.
+# make sure synthetic data isn't literally in the test set to ensure quality.
