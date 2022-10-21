@@ -55,7 +55,8 @@ class Sampler:
         new_data = (new_max/old_max) * (data - old_max) + new_max
         return new_data.astype(int)
 
-    def sample(self, data, sample_size, method="choice"):
+    def sample(self, data, sample_size, seed=1, method="choice"):
+        np.random.seed(seed)
         index = list(range(len(data)))
         if method == "choice":
             new_index = np.random.choice(
