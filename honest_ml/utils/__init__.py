@@ -1,3 +1,3 @@
-from .utils import RecoverSeeds
+from .utils import RecoverSeeds, Sampler
 
-__all__ = ["RecoverSeeds"]
+__all__ = ["RecoverSeeds", "Sampler"]
