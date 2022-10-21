@@ -67,7 +67,7 @@ class Sampler:
                 size=sample_size
             )
             new_index = self.rescale(
-                new_index, data.shape[0]
+                new_index, data.shape[0]-1
             )
         if method == "gamma":
             shape = np.random.choice(
@@ -79,7 +79,7 @@ class Sampler:
                 size=sample_size
             )
             new_index = self.rescale(
-                new_index, data.shape[0]
+                new_index, data.shape[0]-1
             )
         if method == "normal":
             new_index = np.random.normal(
@@ -88,7 +88,7 @@ class Sampler:
                 size=sample_size
             )
             new_index = self.rescale(
-                new_index, data.shape[0]
+                new_index, data.shape[0]-1
             )
         if method == "poisson":
             new_index = np.random.poisson(
@@ -96,7 +96,7 @@ class Sampler:
                 size=data.shape[0]
             )
             new_index = self.rescale(
-                new_index, data.shape[0]
+                new_index, data.shape[0]-1
             )
         if isinstance(data, np.ndarray):
             data = pd.Series(data)
