@@ -1,7 +1,9 @@
 from .trainer import (
     EvaluateModel, BaseTrainer,
     RegressionTrainer, ClassificationTrainer,
-    GradientBoostingRegressor
+    GradientBoostingRegressor,
+    EvaluateModelAndHyperParameters,
+    GeneticAlgorithm
 )
 
 __all__ = [
@@ -9,5 +11,7 @@ __all__ = [
     "BaseTrainer",
     "RegressionTrainer",
     "ClassificationTrainer",
-    "GradientBoostingRegressor"
+    "GradientBoostingRegressor",
+    "EvaluateModelAndHyperParameters",
+    "GeneticAlgorithm"
 ]
