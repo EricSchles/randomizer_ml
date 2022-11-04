@@ -210,6 +210,238 @@ class EvaluateModel:
             )
         return results            
 
+class EvaluateModelAndHyperParameters:
+    def __init__(self,
+                 model_type: str,
+                 model: BaseEstimator,
+                 data: pd.DataFrame,
+                 target: pd.Series,
+                 num_trials: int,
+                 hyperparameters: list,
+                 sufficient_compute: bool = False,
+                 metrics: dict = {}):
+        if model_type not in ["regression", "classification"]:
+            raise Exception("model_type must be regression or classification")
+        self.model_type = model_type
+        self.model = model
+        if self.is_pipeline():
+            self.check_model_name()
+        # rule of thumb for now
+        if data.shape[0] * data.shape[1] > 50000:
+            valid_tunable, compute_size = self.valid_tunable_hyperparameters(
+                num_trials, hyperparameters
+            )
+            if (not valid_tunable) and (not sufficient_compute):
+                raise Exception(f'''
+                You are trying to make {compute_size} calculations
+                with insufficient compute resources.
+                If you feel you have reached this exception in error
+                you can set sufficient_compute=True
+                ''')
+            if not valid_tunable:
+                raise Warning(f'''
+                You are trying to make {compute_size} calculations.
+                Are you sure you have enough compute?
+                ''')
+        self.tunable_hyperparameters = hyperparameters
+        self.hyperparameters = model.get_params()
+        for tunable_param in self.tunable_hyperparameters:
+            if isinstance(self.hyperparameters[tunable_param], str):
+                raise Exception('String hyperparameters not supported yet')
+        self.data = data
+        self.target = target
+        self.num_trials = num_trials
+        self.metrics = metrics
+
+    def fuzzer(self, value, size):
+        '''
+        Fuzzes a given parameter value to a 100 random values
+        '''
+        scale = abs(value)
+        new_values = np.random.normal(0, scale * 3, size=size)
+        # ensures the original value is in the array
+        new_values = np.append(0, new_values)
+        new_values += value
+        return list(new_values)
+
+    def valid_tunable_hyperparameters(self, num_trials, hyperparameters):
+        compute_size = num_trials * len(hyperparameters) * 40
+        return compute_size < 1000, compute_size
+    
+    def _get_mask(self, y_train: pd.Series, num_rows: int):
+        mask = np.full(num_rows, False)
+        mask[y_train.index] = True
+        return mask
+
+    def is_pipeline(self):
+        dummy_pipeline = Pipeline(steps=[
+            ('dummy regressor', LogisticRegression())
+        ])
+        return type(self.model) == type(dummy_pipeline)
+
+    def check_model_name(self):
+        if 'model' != list(self.model.named_steps.keys())[-1]:
+            raise Exception("model must be named 'model' in the pipeline")
+
+    def custom_report(self, y_test, y_pred):
+        return {
+            metric_name: metric(y_test, y_pred)
+            for (metric_name, metric) in self.metrics.items()
+        }
+            
+    def report(self, y_test, y_pred):
+        if self.metrics:
+            report_dict = self.custom_report(y_test, y_pred)
+        if self.model_type == "classification":
+            report_dict = classification_report(y_test, y_pred, output_dict=True)
+        elif self.model_type == "regression":
+            report_dict = self.regression_report(y_test, y_pred)
+        return report_dict
+            
+    def regression_report(self, y_test, y_pred):
+        return {
+            "mse": metrics.mean_squared_error(y_test, y_pred),
+            "max_error": metrics.max_error(y_test, y_pred),
+            "mae": metrics.mean_absolute_error(y_test, y_pred)
+        }
+
+    def get_models_to_fit(self):
+        base_model = self.model
+        base_hp = self.hyperparameters
+        param_dict = {}.fromkeys(self.tunable_hyperparameters)
+
+        for param in self.tunable_hyperparameters:
+            param_dict[param] = []
+        for param in self.tunable_hyperparameters:
+            value = base_hp[param]
+            if isinstance(value, float):
+                param_dict[param] += self.fuzzer(value, 10)
+                param_dict[param] += self.fuzzer(value/10, 10)
+                param_dict[param] += self.fuzzer(value/100, 10)
+                param_dict[param] += self.fuzzer(value/1000, 10)
+            if isinstance(value, int):
+                param_dict[param] += self.fuzzer(value, 10)
+                param_dict[param] += self.fuzzer(value * 3, 10)
+                param_dict[param] += self.fuzzer(value * 5, 10)
+                param_dict[param] += self.fuzzer(value * 10, 10)
+            if isinstance(value, bool):
+                param_dict[param] += [True, False]
+        models = []
+        for param in self.tunable_hyperparameters:
+            for value in param_dict[param]:
+                tmp_hp = base_hp
+                tmp_model = base_model
+                tmp_hp[param] = value
+                try:
+                    tmp_model.set_params(**tmp_hp)
+                    models.append(tmp_model)
+                except:
+                    continue
+        return models
+                
+    def _fit(self, results, seed, X_train, X_test, y_train, y_test):
+        models = self.get_models_to_fit()
+        for model in models:
+            hyperparameters = model.get_params()
+            try:
+                model.fit(X_train, y_train)
+            except:
+                # invalid parameter configuration
+                continue
+            y_pred = model.predict(X_test)
+            report_dict = self.report(y_test, y_pred)
+            report_dict["mask"] = self._get_mask(y_train, self.data.shape[0])
+            report_dict["seed"] = seed
+            report_dict["hyperparameters"] = hyperparameters
+            if self.is_pipeline():
+                if 'coef_' in dir(model.named_steps['model']):
+                    report_dict['coef'] = model.named_steps['model'].coef_
+            else:
+                if "coef_" in dir(model):
+                    report_dict['coef'] = model.coef_
+                if "feature_importances_" in dir(model):
+                    report_dict['coef'] = model.feature_importances_
+            results.append(report_dict)
+        return results
+
+    def is_valid_split(self, y_train, y_test):
+        if self.model_type == "classification":
+            target_classes = self.target.unique()
+            target_classes = sorted(target_classes)
+            train_classes = y_train.unique()
+            train_classes = sorted(train_classes)
+            test_classes = y_test.unique()
+            test_classes = sorted(test_classes)
+            return (
+                (target_classes == train_classes) and
+                (target_classes == test_classes)
+            )
+        else:
+            return True
+        
+    def fit_random(self, seed_strategy, test_size=0.1, seeds_tried=[]):
+        results = []
+        if seed_strategy == "sequential":
+            for seed in range(self.num_trials):
+                X_train, X_test, y_train, y_test = train_test_split(
+                    self.data, self.target,
+                    test_size=test_size,
+                    random_state=seed
+                )
+                if not self.is_valid_split(y_train, y_test):
+                    continue
+                results = self._fit(
+                    results, seed, X_train, X_test, y_train, y_test
+                )
+        elif seed_strategy == "random":
+            seeds = [] + seeds_tried
+            for _ in range(self.num_trials):
+                seed, seeds = get_random_seed(seeds)
+                X_train, X_test, y_train, y_test = train_test_split(
+                    self.data, self.target,
+                    test_size=test_size,
+                    random_state=seed
+                )
+                if not self.is_valid_split(y_train, y_test):
+                    continue
+                results = self._fit(
+                    results, seed, X_train, X_test, y_train, y_test
+                )
+        else:
+            raise Exception("Unknown seed strategy.")
+        return results
+
+    def _mask_split(self, train_mask):
+        test_mask = ~train_mask
+        X_train = self.data[train_mask]
+        X_test = self.data[test_mask]
+        y_train = self.target[train_mask]
+        y_test = self.target[test_mask]
+        return (
+            X_train, X_test,
+            y_train, y_test
+        )
+
+    def fit_sequential(self):
+        results = []
+        num_rows = self.data.shape[0]
+        if num_rows < 20:
+            raise Exception("Cannot do sequential fit with less than 20 data points")
+        first_ten_percent = int(num_rows * 0.1)
+        last_ten_percent = int(num_rows * 0.9)
+        seed = None
+        for pivot in range(first_ten_percent, last_ten_percent):
+            train_mask = get_sequential_mask(data.shape[0], pivot)
+            X_train, X_test, y_train, y_test = self._mask_split(train_mask)
+            if not self.is_valid_split(y_train, y_test):
+                continue
+            results = self._fit(
+                results, seed, X_train, X_test, y_train, y_test
+            )
+        return results            
+
+
+    
 class BaseTrainer:
     def __init__(self, model):
         self.model = model
