@@ -99,15 +99,43 @@ class EvaluateModel:
             metric_name: metric(y_test, y_pred)
             for (metric_name, metric) in self.metrics.items()
         }
-            
+
+    def get_classes(self):
+        if len(self.target.shape) == 2:
+            return list(self.target.ravel().unique())
+        return list(self.target.unique())
+
+    def get_custom_classification_report(self, y_test, y_pred):
+        if len(y_test.shape) == 2:
+            y_test = y_test.ravel()
+            y_pred = y_pred.ravel()
+        y_test = pd.Series(y_test)
+        y_pred = pd.Series(y_pred)
+        classes = self.get_classes()
+        report_dict = {}
+        for _class in classes:
+            tmp_y_test = y_test[y_test == _class]
+            tmp_y_pred = y_pred.iloc[tmp_y_test.index]
+            tmp_report = self.custom_report(
+                tmp_y_test, tmp_y_pred
+            )
+            tmp_report["support"] = len(tmp_y_test)
+            report_dict[_class] = tmp_report
+        return report_dict
+
     def report(self, y_test, y_pred):
         if self.metrics:
-            report_dict = self.custom_report(y_test, y_pred)
+            if self.model_type == "classification":
+                report_dict = self.get_custom_classification_report(
+                    y_test, y_pred
+                )
+            else:
+                report_dict = self.custom_report(y_test, y_pred)
         if self.model_type == "classification":
             report_dict = classification_report(y_test, y_pred, output_dict=True)
         elif self.model_type == "regression":
             report_dict = self.regression_report(y_test, y_pred)
-        return report_dict
+        return report_dict            
             
     def regression_report(self, y_test, y_pred):
         return {
@@ -239,10 +267,10 @@ class EvaluateModelAndHyperParameters:
                 you can set sufficient_compute=True
                 ''')
             if not valid_tunable:
-                raise Warning(f'''
+                print(Warning(f'''
                 You are trying to make {compute_size} calculations.
                 Are you sure you have enough compute?
-                ''')
+                '''))
         self.tunable_hyperparameters = hyperparameters
         self.hyperparameters = model.get_params()
         for tunable_param in self.tunable_hyperparameters:
@@ -288,10 +316,38 @@ class EvaluateModelAndHyperParameters:
             metric_name: metric(y_test, y_pred)
             for (metric_name, metric) in self.metrics.items()
         }
-            
+
+    def get_classes(self):
+        if len(self.target.shape) == 2:
+            return list(self.target.ravel().unique())
+        return list(self.target.unique())
+
+    def get_custom_classification_report(self, y_test, y_pred):
+        if len(y_test.shape) == 2:
+            y_test = y_test.ravel()
+            y_pred = y_pred.ravel()
+        y_test = pd.Series(y_test)
+        y_pred = pd.Series(y_pred)
+        classes = self.get_classes()
+        report_dict = {}
+        for _class in classes:
+            tmp_y_test = y_test[y_test == _class]
+            tmp_y_pred = y_pred.iloc[tmp_y_test.index]
+            tmp_report = self.custom_report(
+                tmp_y_test, tmp_y_pred
+            )
+            tmp_report["support"] = len(tmp_y_test)
+            report_dict[_class] = tmp_report
+        return report_dict
+
     def report(self, y_test, y_pred):
         if self.metrics:
-            report_dict = self.custom_report(y_test, y_pred)
+            if self.model_type == "classification":
+                report_dict = self.get_custom_classification_report(
+                    y_test, y_pred
+                )
+            else:
+                report_dict = self.custom_report(y_test, y_pred)
         if self.model_type == "classification":
             report_dict = classification_report(y_test, y_pred, output_dict=True)
         elif self.model_type == "regression":
