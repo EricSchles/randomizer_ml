@@ -397,7 +397,7 @@ class EvaluateModelAndHyperParameters:
                 
     def _fit(self, results, seed, X_train, X_test, y_train, y_test):
         models = self.get_models_to_fit()
-        for model in models:
+        for model_index, model in enumerate(models):
             hyperparameters = model.get_params()
             try:
                 model.fit(X_train, y_train)
@@ -406,6 +406,7 @@ class EvaluateModelAndHyperParameters:
                 continue
             y_pred = model.predict(X_test)
             report_dict = self.report(y_test, y_pred)
+            report_dict["hyperparameter_set"] = model_index
             report_dict["mask"] = self._get_mask(y_train, self.data.shape[0])
             report_dict["seed"] = seed
             report_dict["hyperparameters"] = hyperparameters
