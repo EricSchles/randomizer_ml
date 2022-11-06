@@ -362,7 +362,7 @@ class EvaluateModelAndHyperParameters:
         }
 
     def get_models_to_fit(self):
-        base_model = self.model
+        base_model = clone(self.model)
         base_hp = self.hyperparameters
         param_dict = {}.fromkeys(self.tunable_hyperparameters)
 
@@ -370,19 +370,19 @@ class EvaluateModelAndHyperParameters:
             param_dict[param] = []
         for param in self.tunable_hyperparameters:
             value = base_hp[param]
-            if isinstance(value, float):
+            if isinstance(value, float) and value <= 1:
                 param_dict[param] += self.fuzzer(value, 10)
                 param_dict[param] += self.fuzzer(value/10, 10)
                 param_dict[param] += self.fuzzer(value/100, 10)
                 param_dict[param] += self.fuzzer(value/1000, 10)
-            if isinstance(value, int):
+            elif isinstance(value, int) or (isinstance(value, float) and value > 1):
                 param_dict[param] += self.fuzzer(value, 10)
                 param_dict[param] += self.fuzzer(value * 3, 10)
                 param_dict[param] += self.fuzzer(value * 5, 10)
                 param_dict[param] += self.fuzzer(value * 10, 10)
-            if isinstance(value, bool):
+            elif isinstance(value, bool):
                 param_dict[param] += [True, False]
-        models = []
+        models = [base_model]
         for param in self.tunable_hyperparameters:
             for value in param_dict[param]:
                 tmp_hp = base_hp
@@ -406,7 +406,10 @@ class EvaluateModelAndHyperParameters:
                 continue
             y_pred = model.predict(X_test)
             report_dict = self.report(y_test, y_pred)
-            report_dict["hyperparameter_set"] = model_index
+            if model_index == 0:
+                report_dict["hyperparameter_set"] = "base"
+            else:
+                report_dict["hyperparameter_set"] = model_index
             report_dict["mask"] = self._get_mask(y_train, self.data.shape[0])
             report_dict["seed"] = seed
             report_dict["hyperparameters"] = hyperparameters
