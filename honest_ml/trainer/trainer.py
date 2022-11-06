@@ -386,7 +386,7 @@ class EvaluateModelAndHyperParameters:
         for param in self.tunable_hyperparameters:
             for value in param_dict[param]:
                 tmp_hp = base_hp
-                tmp_model = base_model
+                tmp_model = clone(base_model)
                 tmp_hp[param] = value
                 try:
                     tmp_model.set_params(**tmp_hp)
