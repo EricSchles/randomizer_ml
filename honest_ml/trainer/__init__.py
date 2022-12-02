@@ -5,6 +5,7 @@ from .trainer import (
     EvaluateModelAndHyperParameters,
     GeneticAlgorithm
 )
+from .analyzer import AnalyzeMeasures
 
 __all__ = [
     "EvaluateModel",
@@ -13,5 +14,6 @@ __all__ = [
     "ClassificationTrainer",
     "GradientBoostingRegressor",
     "EvaluateModelAndHyperParameters",
-    "GeneticAlgorithm"
+    "GeneticAlgorithm",
+    "AnalyzeMeasures"
 ]
