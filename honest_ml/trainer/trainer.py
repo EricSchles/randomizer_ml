@@ -290,7 +290,7 @@ class EvaluateModelAndHyperParameters:
         # ensures the original value is in the array
         new_values = np.append(0, new_values)
         new_values += value
-        return list(new_values)
+        return new_values
 
     def valid_tunable_hyperparameters(self, num_trials, hyperparameters):
         compute_size = num_trials * len(hyperparameters) * 40
@@ -371,15 +371,15 @@ class EvaluateModelAndHyperParameters:
         for param in self.tunable_hyperparameters:
             value = base_hp[param]
             if isinstance(value, float) and value <= 1:
-                param_dict[param] += self.fuzzer(value, 10)
-                param_dict[param] += self.fuzzer(value/10, 10)
-                param_dict[param] += self.fuzzer(value/100, 10)
-                param_dict[param] += self.fuzzer(value/1000, 10)
+                param_dict[param] += list(self.fuzzer(value, 10).astype(float))
+                param_dict[param] += list(self.fuzzer(value/10, 10).astype(float))
+                param_dict[param] += list(self.fuzzer(value/100, 10).astype(float))
+                param_dict[param] += list(self.fuzzer(value/1000, 10).astype(float))
             elif isinstance(value, int) or (isinstance(value, float) and value > 1):
-                param_dict[param] += self.fuzzer(value, 10)
-                param_dict[param] += self.fuzzer(value * 3, 10)
-                param_dict[param] += self.fuzzer(value * 5, 10)
-                param_dict[param] += self.fuzzer(value * 10, 10)
+                param_dict[param] += list(self.fuzzer(value, 10).astype(int))
+                param_dict[param] += list(self.fuzzer(value * 3, 10).astype(int))
+                param_dict[param] += list(self.fuzzer(value * 5, 10).astype(int))
+                param_dict[param] += list(self.fuzzer(value * 10, 10).astype(int))
             elif isinstance(value, bool):
                 param_dict[param] += [True, False]
         models = [base_model]
