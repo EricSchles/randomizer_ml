@@ -8,37 +8,23 @@ from sklearn.neighbors import KernelDensity
 
 # for classification
         
-def change_me():
-    classes = get_classes(y)
-    hp_groups = group_model_instances(model_instances)
-    hp_max_scores = describe_scores(max, hp_groups, classes)
-    hp_min_scores = describe_scores(min, hp_groups, classes)
-    hp_mean_scores = describe_scores(np.mean, hp_groups, classes)
-    hp_median_scores = describe_scores(np.median, hp_groups, classes)
-    hp_iqr_scores = describe_scores(stats.iqr, hp_groups, classes)
-    hp_range_scores = get_range(hp_max_scores, hp_min_scores)
-
-def change_me():
-    classes = get_classes(y)
-    hp_groups = group_model_instances(model_instances)
-    score_groups = get_scores(hp_groups, classes)
-    measures = list(score_groups["base"].keys())
-    for measure in measures:
-        for group in score_groups:
-            dist = score_groups[group][measure]
-            plt.hist(dist)
-            plt.title(f"{group} - {measure}")
-            plt.show()
-
-
 # we could learn a model of hyperparameters importance to a given measure
 # there are several values for each hyperparameter set.  So we need to find
 # the right problem.  But this is a possability.
 
-class AnalyzeMeasures:
+class AnalyzeClassificationMeasures:
     def __init__(self):
         pass
-    
+
+    def hist_plot_score_groups(self):
+        measures = list(self.score_groups["base"].keys())
+        for measure in measures:
+            for group in self.score_groups:
+                dist = self.score_groups[group][measure]
+                plt.hist(dist)
+                plt.title(f"{group} - {measure}")
+                plt.show()
+
     def fit(self, model_instances, X, y, model=LinearRegression(), correlation_function=stats.spearmanr):
         self.model_instances = model_instances
         self.hp_groups = self.group_model_instances(model_instances)
@@ -53,7 +39,7 @@ class AnalyzeMeasures:
         self.group_diffs = self.difference_hyperparameters(hp_groups)
         self.score_groups = self.get_scores(hp_groups, classes)
         self.best_hyperparameters = self.get_best_hyperparameters(self, model_instances, y)
-        self.get_groups(mdoel=model, correlation_function=correlation_function)
+        self.get_groups(model=model, correlation_function=correlation_function)
 
     def get_groups(self, model=LinearRegression(), correlation_function=stats.spearmanr):
         self.model_groups = self.get_model_relationship(
@@ -70,11 +56,46 @@ class AnalyzeMeasures:
 
     def coarse_grained_analysis(self):
         # fill this in with coarse analyses as defined below
-        pass
+        self.coarse_var = self.coarse_analyze_variance_sensitivity()
+        self.coarse_concentration = self.coarse_analyze_concentration_sensitivity()
+        self.coarse_iqr = self.coarse_analyze_iqr_sensitivity()
+        self.coarse_range = self.coarse_analyze_range_sensitivity()
+        self.coarse_density_ks = self.coarse_analyze_density_sensitivity_ks_2samp()
+        self.coarse_density_cramer_von_mises = self.coarse_analyze_density_sensitivity_cramervonmises_2samp()
+        self.coarse_corr = _self.coarse_analyze_correlation_sensitivity()
+        self.coarse_model = self.coarse_analyze_model_based_sensitivity()
+        return {
+            "coarse_variance_sensitivity": self.coarse_var,
+            "coarse_concentration_sensitivity": self.coarse_concentration,
+            "coarse_iqr_sensitivity": self.coarse_iqr,
+            "coarse_range_sensitivity": self.coarse_range,
+            "coarse_density_ks_2sample_sensitivity": self.coarse_density_ks,
+            "coarse_density_cramer_von_mises_2sample_sensitivity": self.coarse_density_cramer_von_mises,
+            "coarse_correlation_sensitivity": self.coarse_corr,
+            "coarse_model_sensitivity": self.coarse_model
+        }
 
     def fine_grained_analysis(self):
         # fill this in with fine analyses as defined below
-        pass
+        self.fine_var = self.fine_analyze_variance_sensitivity()
+        self.fine_concentration = self.fine_analyze_concentration_sensitivity()
+        self.fine_iqr = self.fine_analyze_iqr_sensitivity()
+        self.fine_range = self.fine_analyze_range_sensitivity()
+        self.fine_density_ks = self.fine_analyze_density_sensitivity_ks_2samp()
+        self.fine_density_cramer_von_mises = self.fine_analyze_density_sensitivity_cramervonmises_2samp()
+        self.fine_corr = _self.fine_analyze_correlation_sensitivity()
+        self.fine_model = self.fine_analyze_model_based_sensitivity()
+        return {
+            "fine_variance_sensitivity": self.fine_var,
+            "fine_concentration_sensitivity": self.fine_concentration,
+            "fine_iqr_sensitivity": self.fine_iqr,
+            "fine_range_sensitivity": self.fine_range,
+            "fine_density_ks_2sample_sensitivity": self.fine_density_ks,
+            "fine_density_cramer_von_mises_2sample_sensitivity": self.fine_density_cramer_von_mises,
+            "fine_correlation_sensitivity": self.fine_corr,
+            "fine_model_sensitivity": self.fine_model
+        }
+        
 
     def group_model_instances(self, model_instances):
         hp_group = {}
@@ -324,7 +345,7 @@ class AnalyzeMeasures:
         density_score = 0
         for index, split in enumerate(splits[1:]):
             density_score += len(series[
-                (series > splits[0]) &
+                (series > splits[index]) &
                 (series < split)
             ]) * split
         return density_score
@@ -594,24 +615,25 @@ class AnalyzeMeasures:
                     hp_sensitivity[hp][value] += var_value
         return hp_sensitivity
 
-    def fine_analyze_density_concentration_sensitivity(self):
+    def fine_analyze_concentration_sensitivity(self):
         """
         Bigger values imply greater sensitivity, in absolute terms
         the more experiments you run the bigger this number will be.
         """
+        
         num_groups = len(self.hp_groups.keys())
         base_hyperparameters = self.hp_groups["base"][0]["hyperparameters"]
         hp_sensitivity = {}
-        for group in self.density_groups:
-            for hp in self.density_groups[group][1]:
+        for group in self.concentration_groups:
+            for hp in self.concentration_groups[group][1]:
                 hp_sensitivity = {
-                    hp: {value: 0 for value in self.density_groups[group][1][hp]}
+                    hp: {value: 0 for value in self.concentration_groups[group][1][hp]}
                 }
-        for group in self.density_groups:
-            density_value = self.density_groups[group][0]
-            for hp in self.density_groups[group][1]:
-                for value in self.density_groups[group][1][hp]:
-                    hp_sensitivity[hp][value] += density_value
+        for group in self.concentration_groups:
+            density_value = self.concentration_groups[group][0]
+            for hp in self.concentration_groups[group][1]:
+                for concentration_value in self.concentration_groups[group][1][hp]:
+                    hp_sensitivity[hp][value] += concentration_value
         return hp_sensitivity
 
     def fine_analyze_iqr_sensitivity(self):
@@ -674,7 +696,7 @@ class AnalyzeMeasures:
                     hp_sensitivity[hp][value] += model_value
         return hp_sensitivity    
 
-    def fine_analyze_density_k2_2samp_sensitivity(self):
+    def fine_analyze_density_sensitivity_ks_2samp(self):
         """
         Bigger values imply greater sensitivity, in absolute terms
         the more experiments you run the bigger this number will be.
@@ -701,7 +723,7 @@ class AnalyzeMeasures:
                     hp_sensitivity[hp][value] += density_value
         return hp_sensitivity    
 
-    def fine_analyze_density_cramervonmises_2samp_sensitivity(self):
+    def fine_analyze_density_sensitivity_cramervonmises_2samp(self):
         """
         Bigger values imply greater sensitivity, in absolute terms
         the more experiments you run the bigger this number will be.
