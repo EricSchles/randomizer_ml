@@ -245,7 +245,7 @@ class EvaluateModelAndHyperParameters:
                  data: pd.DataFrame,
                  target: pd.Series,
                  num_trials: int,
-                 hyperparameters: list,
+                 hyperparameter_ranges: dict,
                  sufficient_compute: bool = False,
                  metrics: dict = {}):
         if model_type not in ["regression", "classification"]:
@@ -255,32 +255,15 @@ class EvaluateModelAndHyperParameters:
         if self.is_pipeline():
             self.check_model_name()
         # rule of thumb for now
-        if data.shape[0] * data.shape[1] > 50000:
-            valid_tunable, compute_size = self.valid_tunable_hyperparameters(
-                num_trials, hyperparameters
-            )
-            if (not valid_tunable) and (not sufficient_compute):
-                raise Exception(f'''
-                You are trying to make {compute_size} calculations
-                with insufficient compute resources.
-                If you feel you have reached this exception in error
-                you can set sufficient_compute=True
-                ''')
-            if not valid_tunable:
-                print(Warning(f'''
-                You are trying to make {compute_size} calculations.
-                Are you sure you have enough compute?
-                '''))
-        self.tunable_hyperparameters = hyperparameters
+        self.tunable_hyperparameters = hyperparameter_ranges
         self.hyperparameters = model.get_params()
-        for tunable_param in self.tunable_hyperparameters:
-            if isinstance(self.hyperparameters[tunable_param], str):
-                raise Exception('String hyperparameters not supported yet')
         self.data = data
         self.target = target
         self.num_trials = num_trials
         self.metrics = metrics
 
+    # probably dead code.
+    # sad.
     def fuzzer(self, value, size):
         '''
         Fuzzes a given parameter value to a 100 random values
@@ -290,11 +273,7 @@ class EvaluateModelAndHyperParameters:
         # ensures the original value is in the array
         new_values = np.append(0, new_values)
         new_values += value
-        return new_values
-
-    def valid_tunable_hyperparameters(self, num_trials, hyperparameters):
-        compute_size = num_trials * len(hyperparameters) * 40
-        return compute_size < 1000, compute_size
+        return np.abs(new_values)
     
     def _get_mask(self, y_train: pd.Series, num_rows: int):
         mask = np.full(num_rows, False)
@@ -361,6 +340,23 @@ class EvaluateModelAndHyperParameters:
             "mae": metrics.mean_absolute_error(y_test, y_pred)
         }
 
+    def test_model_params(self, model):
+        test_model = clone(model)
+        X = np.random.randint(0, 20, size=100).reshape(10,10)
+        if self.model_type == "classification":
+            y = np.random.randint(0, 1, size=10)
+            try:
+                test_model.fit(X, y)
+            except:
+                return False
+        if self.model_type == "regression":
+            y = np.random.random(size=10)
+            try:
+                test_model.fit(X, y)
+            except:
+                return False
+        return True
+            
     def get_models_to_fit(self):
         base_model = clone(self.model)
         base_hp = self.hyperparameters
@@ -370,29 +366,28 @@ class EvaluateModelAndHyperParameters:
             param_dict[param] = []
         for param in self.tunable_hyperparameters:
             value = base_hp[param]
-            if isinstance(value, float) and value <= 1:
-                param_dict[param] += list(self.fuzzer(value, 10).astype(float))
-                param_dict[param] += list(self.fuzzer(value/10, 10).astype(float))
-                param_dict[param] += list(self.fuzzer(value/100, 10).astype(float))
-                param_dict[param] += list(self.fuzzer(value/1000, 10).astype(float))
-            elif isinstance(value, int) or (isinstance(value, float) and value > 1):
-                param_dict[param] += list(self.fuzzer(value, 10).astype(int))
-                param_dict[param] += list(self.fuzzer(value * 3, 10).astype(int))
-                param_dict[param] += list(self.fuzzer(value * 5, 10).astype(int))
-                param_dict[param] += list(self.fuzzer(value * 10, 10).astype(int))
-            elif isinstance(value, bool):
-                param_dict[param] += [True, False]
+            param_info = self.tunable_hyperparameters[param]
+            if param_info["type"] == "float":
+                low, high = param_info["range"]
+                param_dict[param] = np.arange(low, high, high/10)
+            if param_info["type"] == "int":
+                low, high = param_info["range"]
+                param_dict[param] = np.arange(low, high, high//10)
+            if param_info["type"] == "str":
+                assert isinstance(param_info["choices"], list), "choices must be list"
+                param_dict[param] = param_info["choices"]
+            if param_info["type"] == "bool":
+                param_dict[param] = [True, False]
         models = [base_model]
         for param in self.tunable_hyperparameters:
             for value in param_dict[param]:
                 tmp_hp = base_hp
                 tmp_model = clone(base_model)
                 tmp_hp[param] = value
-                try:
-                    tmp_model.set_params(**tmp_hp)
+                tmp_model.set_params(**tmp_hp)
+                # certain configurations won't work
+                if self.test_model_params(tmp_model):
                     models.append(tmp_model)
-                except:
-                    continue
         return models
                 
     def _fit(self, results, seed, X_train, X_test, y_train, y_test):
@@ -402,7 +397,6 @@ class EvaluateModelAndHyperParameters:
             try:
                 model.fit(X_train, y_train)
             except:
-                # invalid parameter configuration
                 continue
             y_pred = model.predict(X_test)
             report_dict = self.report(y_test, y_pred)

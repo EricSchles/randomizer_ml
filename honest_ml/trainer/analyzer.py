@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from scipy import stats
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
@@ -12,6 +13,19 @@ from sklearn.neighbors import KernelDensity
 # there are several values for each hyperparameter set.  So we need to find
 # the right problem.  But this is a possability.
 
+
+# next up:
+# add more plots, like https://towardsdatascience.com/stop-using-0-5-as-the-threshold-for-your-binary-classifier-8d7168290d44
+# text above the plot is "Console output (1/1):"
+# also consider adding a plot where hyperparameter is on the x-axis and the relevant sensitivity measure is on the y?
+# also consider adding a beeswarm plot like shap: https://shap.readthedocs.io/en/latest/example_notebooks/api_examples/plots/beeswarm.html
+# this would work a little different, each of the hyperparameter sensitivities would be shown, without the context of how much the hyperparameter
+# in question changed.  So you could see the full variance of sensitivity, but not the inflection points.
+# then use the 2nd plot or the histograms to figure out where the cutoffs are.
+# also consider the first chart as a way of capturing all of this, for like 2 or 3 of the hyperparameters at a time maybe?
+# I don't think you could show all of them.
+
+# also, consider making text analyses for all of these.  Just because everyone else likes visuals doesn't mean I have to.
 class AnalyzeClassificationMeasures:
     def __init__(self):
         pass
@@ -30,15 +44,33 @@ class AnalyzeClassificationMeasures:
         self.hp_groups = self.group_model_instances(model_instances)
         self.hp_groups = self.sort_by_seed(self.hp_groups)
         self.classes = self.get_classes(y)
-        self.hp_max_scores = describe_scores(max, hp_groups, classes)
-        self.hp_min_scores = describe_scores(min, hp_groups, classes)
-        self.hp_mean_scores = describe_scores(np.mean, hp_groups, classes)
-        self.hp_median_scores = describe_scores(np.median, hp_groups, classes)
-        self.hp_iqr_scores = describe_scores(stats.iqr, hp_groups, classes)
-        self.hp_range_scores = get_range(hp_max_scores, hp_min_scores)
-        self.group_diffs = self.difference_hyperparameters(hp_groups)
-        self.score_groups = self.get_scores(hp_groups, classes)
-        self.best_hyperparameters = self.get_best_hyperparameters(self, model_instances, y)
+        self.hp_max_scores = self.describe_scores(
+            np.max, self.hp_groups, self.classes
+        )
+        self.hp_min_scores = self.describe_scores(
+            np.min, self.hp_groups, self.classes
+        )
+        self.hp_mean_scores = self.describe_scores(
+            np.mean, self.hp_groups, self.classes
+        )
+        self.hp_median_scores = self.describe_scores(
+            np.median, self.hp_groups, self.classes
+        )
+        self.hp_iqr_scores = self.describe_scores(
+            stats.iqr, self.hp_groups, self.classes
+        )
+        self.hp_range_scores = self.get_range(
+            self.hp_max_scores, self.hp_min_scores
+        )
+        self.group_diffs = self.difference_hyperparameters(
+            self.hp_groups
+        )
+        self.score_groups = self.get_scores(
+            self.hp_groups, self.classes
+        )
+        self.best_hyperparameters = self.get_best_hyperparameters(
+            model_instances, y
+        )
         self.get_groups(model=model, correlation_function=correlation_function)
 
     def get_groups(self, model=LinearRegression(), correlation_function=stats.spearmanr):
@@ -51,7 +83,7 @@ class AnalyzeClassificationMeasures:
         self.var_groups = self.get_variances()
         self.concentration_groups = self.get_concentration()
         self.iqr_groups = self.get_iqrs()
-        self.range_groups = self.get_range()
+        self.range_groups = self.get_range_groups()
         self.density_groups = self.get_density()        
 
     def coarse_grained_analysis(self):
@@ -166,7 +198,7 @@ class AnalyzeClassificationMeasures:
             iqr_score += iqr_scores[measure]
             range_score += range_scores[measure]
         return (
-            max_score + min_score + mean_score + median_score + 1/iqr_scores + 1/range_scores
+            max_score + min_score + mean_score + median_score + 1/iqr_score + 1/range_score
         )
 
     def get_best_hyperparameters(self, model_instances, y):
@@ -195,16 +227,20 @@ class AnalyzeClassificationMeasures:
         hp_score = {}
         for group in hp_groups:
             hp_score[group] = {
-                    "f1-score, macro-avg": [
+                "f1-score, macro-avg": [
                     model_instance["macro avg"]["f1-score"]
                     for model_instance in hp_groups[group]
                 ],
-                    "precision, macro-avg": [
+                "precision, macro-avg": [
                     model_instance["macro avg"]["precision"]
                     for model_instance in hp_groups[group]
                 ],
-                    "recall, macro-avg": [
+                "recall, macro-avg": [
                     model_instance["macro avg"]["recall"]
+                    for model_instance in hp_groups[group]
+                ],
+                "seed": [
+                    model_instance["seed"]
                     for model_instance in hp_groups[group]
                 ]
             }
@@ -224,13 +260,13 @@ class AnalyzeClassificationMeasures:
         return hp_score
 
     def difference_hyperparameters(self, hp_groups):
-        base_hps = hp_groups["base"]['hyperparameters']
+        base_hps = hp_groups["base"][0]['hyperparameters']
         group_differences = {}
         for group in hp_groups:
             if group == "base":
                 continue
             group_differences[group] = {}
-            tmp_hps = hp_groups[group]["hyperparameters"]
+            tmp_hps = hp_groups[group][0]["hyperparameters"]
             for hp in tmp_hps:
                 if isinstance(tmp_hps[hp], int) or isinstance(tmp_hps, float):
                     if not np.allclose(tmp_hps[hp], base_hps[hp]):
@@ -278,9 +314,13 @@ class AnalyzeClassificationMeasures:
             for measure in self.score_groups[group]:
                 y = np.array(self.score_groups["base"][measure])
                 x = np.array(self.score_groups[group][measure]).reshape(-1, 1)
-                X_train, X_test, y_train, y_test = train_test_split(
-                    x, y, test_size=0.1
-                )
+                try:
+                    X_train, X_test, y_train, y_test = train_test_split(
+                        x, y, test_size=0.1
+                    )
+                except:
+                    import code
+                    code.interact(local=locals())
                 model.fit(X_train, y_train)
                 y_pred = model.predict(X_test)
                 loss = mean_absolute_error(y_test, y_pred)
@@ -320,8 +360,9 @@ class AnalyzeClassificationMeasures:
         """
         var_groups = {}
         base_measures = {}
-        for measure in self.score_groups[group]:
-            base_measures[measure] = np.var(self.score_groups["base"][measure])
+        for group in self.hp_groups:
+            for measure in self.score_groups[group]:
+                base_measures[measure] = np.var(self.score_groups["base"][measure])
         for group in self.hp_groups:
             if group == "base":
                 continue
@@ -342,6 +383,8 @@ class AnalyzeClassificationMeasures:
             0.4, 0.5, 0.6,
             0.7, 0.8, 0.9, 1
         ]
+        if not isinstance(series, pd.Series):
+            series = pd.Series(series)
         density_score = 0
         for index, split in enumerate(splits[1:]):
             density_score += len(series[
@@ -355,16 +398,17 @@ class AnalyzeClassificationMeasures:
         """
         concentration_groups = {}
         base_measures = {}
-        for measure in self.score_groups[group]:
-            base_measures[measure] = calc_density(
-                self.score_groups["base"][measure]
-            )
+        for group in self.hp_groups:
+            for measure in self.score_groups[group]:
+                base_measures[measure] = self.calc_density(
+                    self.score_groups["base"][measure]
+                )
         for group in self.hp_groups:
             if group == "base":
                 continue
             concentration_groups[group] = []
             for measure in self.score_groups[group]:
-                concentration_diff = abs(base_measures[measure] - calc_density(self.score_groups[group][measure]))
+                concentration_diff = abs(base_measures[measure] - self.calc_density(self.score_groups[group][measure]))
                 concentration_groups[group].append(
                     (concentration_diff, self.group_diffs[group], group)
                 )
@@ -374,8 +418,10 @@ class AnalyzeClassificationMeasures:
         """
         """
         iqr_groups = {}
-        for measure in self.score_groups[group]:
-            base_measures[measure] = stats.iqr(self.score_groups["base"][measure])
+        base_measures = {}
+        for group in self.hp_groups:
+            for measure in self.score_groups[group]:
+                base_measures[measure] = stats.iqr(self.score_groups["base"][measure])
 
         for group in self.hp_groups:
             if group == "base":
@@ -395,40 +441,51 @@ class AnalyzeClassificationMeasures:
     #stats.cramervonmises_2samp
     #stats.ks_2samp
 
-    def get_range(self):
+    def get_range_groups(self):
         """
         """
         range_groups = {}
-        for measure in self.score_groups[group]:
-            base_max = np.max(
-                self.score_groups["base"][measure]
-            )
-            base_min = np.min(
-                self.score_groups["base"][measure]
-            )
-            base_measures[measure] = base_max - base_min 
+        base_measures = {}
+        for group in self.hp_groups:
+            for measure in self.score_groups[group]:
+                base_max = np.max(
+                    self.score_groups["base"][measure]
+                )
+                base_min = np.min(
+                    self.score_groups["base"][measure]
+                )
+                base_measures[measure] = base_max - base_min 
 
         for group in self.hp_groups:
+            if group == "base":
+                continue
             range_groups[group] = []
             for measure in self.score_groups[group]:
                 _range = np.max(self.score_groups[group][measure]) - np.min(self.score_groups[group][measure])
                 _range_diff = abs(base_measures[measure] - _range)
+                # base is missing from the gorup_diffs
+                
                 range_groups[group].append(
-                    (range_diff, self.group_diffs[group], group)
+                    (_range_diff, self.group_diffs[group], group)
                 )
         return range_groups
 
     def get_density(self):
         density_groups = {}
         for group in self.hp_groups:
-            range_groups[group] = []
+            density_groups[group] = []
             for measure in self.score_groups[group]:
-                X = self.score_groups[group][measure]
+                X = np.array(self.score_groups[group][measure]).reshape(-1, 1)
                 kde = KernelDensity(kernel='gaussian', bandwidth=0.2).fit(X)
                 density = kde.score_samples(X)
-                density_groups[group].append(
-                    (density, self.group_diffs[group], group)
-                )
+                if group == "base":
+                    density_groups[group].append(
+                        (density, {}, group)
+                    )
+                else:
+                    density_groups[group].append(
+                        (density, self.group_diffs[group], group)
+                    )
         return density_groups
 
     # this could be easier, just do inverse of correlation and add this to each value
