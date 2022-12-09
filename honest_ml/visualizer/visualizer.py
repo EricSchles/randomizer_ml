@@ -23,6 +23,8 @@ class Visualizer:
             classes.remove("mask")
             classes.remove("seed")
             classes.remove("hyperparameters")
+            if "hyperparameter_set" in classes:
+                classes.remove("hyperparameter_set")
             if "coef" in classes:
                 classes.remove("coef")
             self.classes = classes
@@ -87,10 +89,14 @@ class Visualizer:
     def visualize_classification(self, show_plot=True, save_plots=False, formatting=None, **kwargs):
         for _class in self.classes:
             for metric in self.classification_metrics:
-                metrics = [
-                    model_instance[_class][metric]
-                    for model_instance in self.model_instances
-                ]
+                try:
+                    metrics = [
+                        model_instance[_class][metric]
+                        for model_instance in self.model_instances
+                    ]
+                except:
+                    import code
+                    code.interact(local=locals())
                 plt.hist(metrics, **kwargs)
                 plt.xlabel(metric)
                 plt.ylabel("magnitude")
