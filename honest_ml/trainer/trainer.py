@@ -344,7 +344,7 @@ class EvaluateModelAndHyperParameters:
         test_model = clone(model)
         X = np.random.randint(0, 20, size=100).reshape(10,10)
         if self.model_type == "classification":
-            y = np.random.randint(0, 1, size=10)
+            y = np.array([1,1,1,1,1,0,0,0,0,0])
             try:
                 test_model.fit(X, y)
             except:
