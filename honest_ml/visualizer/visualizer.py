@@ -89,14 +89,10 @@ class Visualizer:
     def visualize_classification(self, show_plot=True, save_plots=False, formatting=None, **kwargs):
         for _class in self.classes:
             for metric in self.classification_metrics:
-                try:
-                    metrics = [
-                        model_instance[_class][metric]
-                        for model_instance in self.model_instances
-                    ]
-                except:
-                    import code
-                    code.interact(local=locals())
+                metrics = [
+                    model_instance[_class][metric]
+                    for model_instance in self.model_instances
+                ]
                 plt.hist(metrics, **kwargs)
                 plt.xlabel(metric)
                 plt.ylabel("magnitude")
