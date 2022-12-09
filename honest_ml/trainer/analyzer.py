@@ -94,7 +94,7 @@ class AnalyzeClassificationMeasures:
         self.coarse_range = self.coarse_analyze_range_sensitivity()
         self.coarse_density_ks = self.coarse_analyze_density_sensitivity_ks_2samp()
         self.coarse_density_cramer_von_mises = self.coarse_analyze_density_sensitivity_cramervonmises_2samp()
-        self.coarse_corr = _self.coarse_analyze_correlation_sensitivity()
+        self.coarse_corr = self.coarse_analyze_correlation_sensitivity()
         self.coarse_model = self.coarse_analyze_model_based_sensitivity()
         return {
             "coarse_variance_sensitivity": self.coarse_var,
@@ -273,7 +273,7 @@ class AnalyzeClassificationMeasures:
                         group_differences[group][hp] = tmp_hps[hp]
                 else:
                     if tmp_hps[hp] != base_hps[hp]:
-                        group_differences[group][hp] = tmp_hps
+                        group_differences[group][hp] = tmp_hps[hp]
         return group_differences
 
     # covariance strength across groups, as a measure of hyperparameter sensitivity?
@@ -340,19 +340,23 @@ class AnalyzeClassificationMeasures:
         res = corr_func(series_a, series_b)
         print(res.correlation, res.pvalue)
         """
-        corr_groups = {}
+        corr_groups = pd.DataFrame()
         for group in self.hp_groups:
             if group == "base":
                 continue
-            corr_groups[group] = []
             for measure in self.score_groups[group]:
                 corr = corr_func(
                     self.score_groups[group][measure],
                     self.score_groups["base"][measure]
                 )
-                corr_groups[group].append(
-                    (corr.correlation, self.group_diffs[group], group)
-                )
+                for hp in self.group_diffs[group]:
+                    corr_groups = corr_groups.append({
+                        "group": group,
+                        "correlation": corr.correlation,
+                        "pvalue": corr.pvalue,
+                        "hp_name": hp,
+                        "hp_value": self.group_diffs[group][hp]
+                    }, ignore_index=True)
         return corr_groups
 
     def get_variances(self):
@@ -491,20 +495,35 @@ class AnalyzeClassificationMeasures:
     # this could be easier, just do inverse of correlation and add this to each value
     # this gives us a better sense of correlation in a less coarse way.
 
+    def type_cast(self, value):
+        if isinstance(value, np.float64):
+            return float(value)
+        elif isinstance(value, np.float32):
+            return float(value)
+        elif isinstance(value, np.float16):
+            return float(value)
+        else:
+            return value
+        
     def coarse_analyze_variance_sensitivity(self):
         num_groups = len(self.hp_groups.keys())
         base_hyperparameters = self.hp_groups["base"][0]["hyperparameters"]
         hp_sensitivity = {}
         for group in self.var_groups:
-            for hp in self.var_groups[group][1]:
-                hp_sensitivity = {
-                    hp: {value: 0 for value in self.var_groups[group][1][hp]}
-                }
+            for var_group in self.var_groups[group]:
+                hp_dict = var_group[1]
+                for hp in hp_dict:
+                    hp_sensitivity.update({
+                        hp: {hp_dict[hp]: 0}
+                    })
         for group in self.var_groups:
-            if self.var_groups[group][0] > 10:
-                for hp in self.var_groups[group][1]:
-                    for value in self.var_groups[group][1][hp]:
-                        hp_sensitivity[hp][value] += 1
+            for triple in self.var_groups[group]:
+                if triple[0] > 10:
+                    for hp in triple[1]:
+                        for value in triple[1][hp]:
+                            hp_sensitivity[hp][value] += 1
+        import code
+        code.interact(local=locals())
         return hp_sensitivity
 
     def coarse_analyze_concentration_sensitivity(self):
@@ -528,14 +547,18 @@ class AnalyzeClassificationMeasures:
         base_hyperparameters = self.hp_groups["base"][0]["hyperparameters"]
         hp_sensitivity = {}
         for group in self.iqr_groups:
-            for hp in self.iqr_groups[group][1]:
+            if group == "base":
+                continue
+            hp_dict = [elem[1] for elem in self.iqr_groups[group]]
+            for hp in hp_dict:
                 hp_sensitivity = {
-                    hp: {value: 0 for value in self.iqr_groups[group][1][hp]}
+                    hp: {value: 0 for value in hp_dict[hp]}
                 }
         for group in self.iqr_groups:
             if self.iqr_groups[group][0] > 5:
-                for hp in self.iqr_groups[group][1]:
-                    for value in self.iqr_groups[group][1][hp]:
+                hp_dict = [elem[1] for elem in self.iqr_groups[group]]
+                for hp in hp_dict:
+                    for value in hp_dict[hp]:
                         hp_sensitivity[hp][value] += 1
         return hp_sensitivity
 
@@ -544,14 +567,18 @@ class AnalyzeClassificationMeasures:
         base_hyperparameters = self.hp_groups["base"][0]["hyperparameters"]
         hp_sensitivity = {}
         for group in self.range_groups:
-            for hp in self.range_groups[group][1]:
+            if group == "base":
+                continue
+            hp_dict = [elem[1] for elem in self.range_groups[group]]
+            for hp in hp_dict:
                 hp_sensitivity = {
-                    hp: {value: 0 for value in self.range_groups[group][1][hp]}
+                    hp: {value: 0 for value in hp_dict[hp]}
                 }
         for group in self.range_groups:
             if self.range_groups[group][0] > 15:
-                for hp in self.range_groups[group][1]:
-                    for value in self.range_groups[group][1][hp]:
+                hp_dict = [elem[1] for elem in self.range_groups[group]]
+                for hp in hp_dict:
+                    for value in hp_dict[hp]:
                         hp_sensitivity[hp][value] += 1
         return hp_sensitivity
 
@@ -560,10 +587,14 @@ class AnalyzeClassificationMeasures:
         base_hyperparameters = self.hp_groups["base"][0]["hyperparameters"]
         hp_sensitivity = {}
         for group in self.density_groups:
-            for hp in self.density_groups[group][1]:
-                hp_sensitivity = {
-                    hp: {value: 0 for value in self.density_groups[group][1][hp]}
-                }
+            if group == "base":
+                continue
+            hp_dicts = [elem[1] for elem in self.density_groups[group]]
+            for hp_dict in hp_dict:
+                for hp in hp_dict:
+                    hp_sensitivity = {
+                        hp: {value: 0 for value in hp_dict}
+                    }
         for group in self.density_groups:
             if group == "base":
                 continue
@@ -572,8 +603,9 @@ class AnalyzeClassificationMeasures:
                 self.density_groups[group][0]
             )
             if res.pvalue < 0.05:
-                for hp in self.density_groups[group][1]:
-                    for value in self.density_groups[group][1][hp]:
+                hp_dict = [elem[1] for elem in self.density_groups[group]]
+                for hp in hp_dict:
+                    for value in hp_dict[hp]:
                         hp_sensitivity[hp][value] += 1
         return hp_sensitivity
 
