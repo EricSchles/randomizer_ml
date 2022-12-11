@@ -306,6 +306,8 @@ class AnalyzeClassificationMeasures:
             self,
             model=LinearRegression()
     ):
+        # this is still broken.
+        # and will be the hardest to fix.
         model_groups = {}
         for group in self.hp_groups:
             if group == "base":
@@ -345,6 +347,8 @@ class AnalyzeClassificationMeasures:
             if group == "base":
                 continue
             for measure in self.score_groups[group]:
+                if measure == "seed":
+                    continue
                 corr = corr_func(
                     self.score_groups[group][measure],
                     self.score_groups["base"][measure]
@@ -352,6 +356,7 @@ class AnalyzeClassificationMeasures:
                 for hp in self.group_diffs[group]:
                     corr_groups = corr_groups.append({
                         "group": group,
+                        "measure": measure,
                         "correlation": corr.correlation,
                         "pvalue": corr.pvalue,
                         "hp_name": hp,
@@ -359,26 +364,37 @@ class AnalyzeClassificationMeasures:
                     }, ignore_index=True)
         return corr_groups
 
+    # fix start
     def get_variances(self):
         """
         """
-        var_groups = {}
+        var_groups = pd.DataFrame()
         base_measures = {}
-        for group in self.hp_groups:
-            for measure in self.score_groups[group]:
-                base_measures[measure] = np.var(self.score_groups["base"][measure])
+        groups = list(self.hp_groups.keys())
+        for measure in self.score_groups[groups[0]]:
+            if measure == "seed":
+                continue
+            base_measures[measure] = np.var(self.score_groups["base"][measure])
         for group in self.hp_groups:
             if group == "base":
                 continue
-            var_groups[group] = []
             for measure in self.score_groups[group]:
-                var_diff = abs(base_measures[measure] - np.var(self.score_groups[group][measure]))
-                var_groups[group].append(
-                    (var_diff, self.group_diffs[group], group)
+                if measure == "seed":
+                    continue
+                var_diff = abs(
+                    base_measures[measure] - np.var(self.score_groups[group][measure])
                 )
+                for hp in self.group_diffs[group]:
+                    var_groups = var_groups.append({
+                        "group": group,
+                        "measure": measure,
+                        "variance_diff": var_diff,
+                        "hp_name": hp,
+                        "hp_value": self.group_diffs[group][hp]
+                    }, ignore_index=True)
         return var_groups
 
-    def calc_density(self, series):
+    def calc_concentration(self, series):
         """
         calculate density per decile
         """
@@ -389,53 +405,76 @@ class AnalyzeClassificationMeasures:
         ]
         if not isinstance(series, pd.Series):
             series = pd.Series(series)
-        density_score = 0
+        concentration_score = 0
         for index, split in enumerate(splits[1:]):
-            density_score += len(series[
+            concentration_score += len(series[
                 (series > splits[index]) &
                 (series < split)
             ]) * split
-        return density_score
+        return concentration_score
 
     def get_concentration(self):
         """
         """
-        concentration_groups = {}
+        concentration_groups = pd.DataFrame()
         base_measures = {}
-        for group in self.hp_groups:
-            for measure in self.score_groups[group]:
-                base_measures[measure] = self.calc_density(
-                    self.score_groups["base"][measure]
-                )
+        groups = list(self.hp_groups.keys())
+        for measure in self.score_groups[groups[0]]:
+            if measure == "seed":
+                continue
+            base_measures[measure] = self.calc_concentration(
+                self.score_groups["base"][measure]
+            )
         for group in self.hp_groups:
             if group == "base":
                 continue
-            concentration_groups[group] = []
             for measure in self.score_groups[group]:
-                concentration_diff = abs(base_measures[measure] - self.calc_density(self.score_groups[group][measure]))
-                concentration_groups[group].append(
-                    (concentration_diff, self.group_diffs[group], group)
+                if measure == "seed":
+                    continue
+                other_measure = self.score_groups[group][measure]
+                concentration_diff = abs(
+                    base_measures[measure] - self.calc_concentration(other_measure)
                 )
+                for hp in self.group_diffs[group]:
+                    concentration_groups = concentration_groups.append({
+                        "group": group,
+                        "measure": measure,
+                        "concentration_diff": concentration_diff,
+                        "hp_name": hp,
+                        "hp_value": self.group_diffs[group][hp]
+                    }, ignore_index=True)                    
         return concentration_groups
 
     def get_iqrs(self):
         """
         """
-        iqr_groups = {}
+        iqr_groups = pd.DataFrame()
         base_measures = {}
-        for group in self.hp_groups:
-            for measure in self.score_groups[group]:
-                base_measures[measure] = stats.iqr(self.score_groups["base"][measure])
-
+        groups = list(self.hp_groups.keys())
+        for measure in self.score_groups[groups[0]]:
+            if measure == "seed":
+                continue
+            base_measures[measure] = stats.iqr(
+                self.score_groups["base"][measure]
+            )
         for group in self.hp_groups:
             if group == "base":
                 continue
-            iqr_groups[group] = []
             for measure in self.score_groups[group]:
-                iqr_diff = abs(base_measures[measure] - stats.iqr(self.score_groups[group][measure]))
-                iqr_groups[group].append(
-                    (iqr_diff, self.group_diffs[group], group)
+                if measure == "seed":
+                    continue
+                other_measure = self.score_groups[group][measure]
+                iqr_diff = abs(
+                    base_measures[measure] - stats.iqr(other_measure)
                 )
+                for hp in self.group_diffs[group]:
+                    iqr_groups = iqr_groups.append({
+                        "group": group,
+                        "measure": measure,
+                        "iqr_diff": iqr_diff,
+                        "hp_name": hp,
+                        "hp_value": self.group_diffs[group][hp]
+                    }, ignore_index=True)
         return iqr_groups
 
     # unclear if smoothing will help
@@ -448,48 +487,67 @@ class AnalyzeClassificationMeasures:
     def get_range_groups(self):
         """
         """
-        range_groups = {}
+        range_groups = pd.DataFrame()
         base_measures = {}
-        for group in self.hp_groups:
-            for measure in self.score_groups[group]:
-                base_max = np.max(
-                    self.score_groups["base"][measure]
-                )
-                base_min = np.min(
-                    self.score_groups["base"][measure]
-                )
-                base_measures[measure] = base_max - base_min 
-
+        groups = list(self.hp_groups.keys())
+        for measure in self.score_groups[groups[0]]:
+            if measure == "seed":
+                continue
+            base_max = np.max(
+                self.score_groups["base"][measure]
+            )
+            base_min = np.min(
+                self.score_groups["base"][measure]
+            )
+            base_measures[measure] = base_max - base_min 
         for group in self.hp_groups:
             if group == "base":
                 continue
-            range_groups[group] = []
             for measure in self.score_groups[group]:
-                _range = np.max(self.score_groups[group][measure]) - np.min(self.score_groups[group][measure])
+                if measure == "seed":
+                    continue
+                _max = np.max(self.score_groups[group][measure])
+                _min = np.min(self.score_groups[group][measure])
+                _range = _max - _min
                 _range_diff = abs(base_measures[measure] - _range)
                 # base is missing from the gorup_diffs
-                
-                range_groups[group].append(
-                    (_range_diff, self.group_diffs[group], group)
-                )
+
+                for hp in self.group_diffs[group]:
+                    range_groups = range_groups.append({
+                        "group": group,
+                        "measure": measure,
+                        "range_diff": _range_diff,
+                        "hp_name": hp,
+                        "hp_value": self.group_diffs[group][hp]
+                    }, ignore_index=True)
         return range_groups
 
     def get_density(self):
-        density_groups = {}
+        density_groups = pd.DataFrame()
         for group in self.hp_groups:
-            density_groups[group] = []
             for measure in self.score_groups[group]:
+                if measure == "seed":
+                    continue
                 X = np.array(self.score_groups[group][measure]).reshape(-1, 1)
                 kde = KernelDensity(kernel='gaussian', bandwidth=0.2).fit(X)
                 density = kde.score_samples(X)
                 if group == "base":
-                    density_groups[group].append(
-                        (density, {}, group)
-                    )
+                    density_groups = density_groups.append({
+                        "group": group,
+                        "measure": measure,
+                        "density": density,
+                        "hp_name": "None",
+                        "hp_value": "None"
+                    }, ignore_index=True)
                 else:
-                    density_groups[group].append(
-                        (density, self.group_diffs[group], group)
-                    )
+                    for hp in self.group_diffs[group]:
+                        density_groups = density_groups.append({
+                            "group": group,
+                            "measure": measure,
+                            "density": density,
+                            "hp_name": hp,
+                            "hp_value": self.group_diffs[group][hp]
+                        }, ignore_index=True)
         return density_groups
 
     # this could be easier, just do inverse of correlation and add this to each value
@@ -508,147 +566,129 @@ class AnalyzeClassificationMeasures:
     def coarse_analyze_variance_sensitivity(self):
         num_groups = len(self.hp_groups.keys())
         base_hyperparameters = self.hp_groups["base"][0]["hyperparameters"]
-        hp_sensitivity = {}
-        for group in self.var_groups:
-            for var_group in self.var_groups[group]:
-                hp_dict = var_group[1]
-                for hp in hp_dict:
-                    hp_sensitivity.update({
-                        hp: {hp_dict[hp]: 0}
-                    })
-        for group in self.var_groups:
-            for triple in self.var_groups[group]:
-                if triple[0] > 10:
-                    for hp in triple[1]:
-                        for value in triple[1][hp]:
-                            hp_sensitivity[hp][value] += 1
-        import code
-        code.interact(local=locals())
+        hp_sensitivity = self.var_groups.copy()
+        hp_sensitivity["hp_sensitivity"] = 0
+        for _, tmp in hp_sensitivity.groupby(by=["hp_name", "hp_value", "measure"]):
+            indices = tmp[tmp["variance_diff"] > 10].index
+            if indices.empty:
+                continue
+            else:
+                hp_sensitivity[indices, "hp_sensitivity"] = len(indices)        
         return hp_sensitivity
 
     def coarse_analyze_concentration_sensitivity(self):
         num_groups = len(self.hp_groups.keys())
         base_hyperparameters = self.hp_groups["base"][0]["hyperparameters"]
-        hp_sensitivity = {}
-        for group in self.concentration_groups:
-            for hp in self.concentration_groups[group][1]:
-                hp_sensitivity = {
-                    hp: {value: 0 for value in self.concentration_groups[group][1][hp]}
-                }
-        for group in self.concentration_groups:
-            if self.concentration_groups[group][0] > 10:
-                for hp in self.concentration_groups[group][1]:
-                    for value in self.concentration_groups[group][1][hp]:
-                        hp_sensitivity[hp][value] += 1
+        hp_sensitivity = self.concentration_groups.copy()
+        hp_sensitivity["hp_sensitivity"] = 0
+        for _, tmp in hp_sensitivity.groupby(by=["hp_name", "hp_value", "measure"]):
+            # I don't think 10 is right here.  Do some experiments.
+            # this is a fine heuristic for now.
+            indices = tmp[tmp["concentration_diff"] > 10].index
+            if indices.empty:
+                continue
+            else:
+                hp_sensitivity[indices, "hp_sensitivity"] = len(indices)        
         return hp_sensitivity
 
     def coarse_analyze_iqr_sensitivity(self):
         num_groups = len(self.hp_groups.keys())
         base_hyperparameters = self.hp_groups["base"][0]["hyperparameters"]
-        hp_sensitivity = {}
-        for group in self.iqr_groups:
-            if group == "base":
+        hp_sensitivity = self.iqr_groups.copy()
+        hp_sensitivity["hp_sensitivity"] = 0
+        for _, tmp in hp_sensitivity.groupby(by=["hp_name", "hp_value", "measure"]):
+            indices = tmp[tmp["iqr_diff"] > 5].index
+            if indices.empty:
                 continue
-            hp_dict = [elem[1] for elem in self.iqr_groups[group]]
-            for hp in hp_dict:
-                hp_sensitivity = {
-                    hp: {value: 0 for value in hp_dict[hp]}
-                }
-        for group in self.iqr_groups:
-            if self.iqr_groups[group][0] > 5:
-                hp_dict = [elem[1] for elem in self.iqr_groups[group]]
-                for hp in hp_dict:
-                    for value in hp_dict[hp]:
-                        hp_sensitivity[hp][value] += 1
+            else:
+                hp_sensitivity[indices, "hp_sensitivity"] = len(indices)        
         return hp_sensitivity
 
     def coarse_analyze_range_sensitivity(self):
         num_groups = len(self.hp_groups.keys())
         base_hyperparameters = self.hp_groups["base"][0]["hyperparameters"]
-        hp_sensitivity = {}
-        for group in self.range_groups:
-            if group == "base":
+        hp_sensitivity = self.range_groups.copy()
+        hp_sensitivity["hp_sensitivity"] = 0
+        for _, tmp in hp_sensitivity.groupby(by=["hp_name", "hp_value", "measure"]):
+            indices = tmp[tmp["range_diff"] > 15].index
+            if indices.empty:
                 continue
-            hp_dict = [elem[1] for elem in self.range_groups[group]]
-            for hp in hp_dict:
-                hp_sensitivity = {
-                    hp: {value: 0 for value in hp_dict[hp]}
-                }
-        for group in self.range_groups:
-            if self.range_groups[group][0] > 15:
-                hp_dict = [elem[1] for elem in self.range_groups[group]]
-                for hp in hp_dict:
-                    for value in hp_dict[hp]:
-                        hp_sensitivity[hp][value] += 1
+            else:
+                hp_sensitivity[indices, "hp_sensitivity"] = len(indices)        
         return hp_sensitivity
 
     def coarse_analyze_density_sensitivity_ks_2samp(self):
-        num_groups = len(self.hp_groups.keys())
+        num_groups = len(self.hp_groups.keys())a
         base_hyperparameters = self.hp_groups["base"][0]["hyperparameters"]
-        hp_sensitivity = {}
-        for group in self.density_groups:
-            if group == "base":
-                continue
-            hp_dicts = [elem[1] for elem in self.density_groups[group]]
-            for hp_dict in hp_dict:
-                for hp in hp_dict:
-                    hp_sensitivity = {
-                        hp: {value: 0 for value in hp_dict}
-                    }
-        for group in self.density_groups:
-            if group == "base":
-                continue
+        hp_sensitivity = self.density_groups.copy()
+        hp_sensitivity["marginal_hp_sensitivity"] = 0
+        hp_sensitivity["hp_sensitivity"] = 0
+        for (_,measure,_,_), tmp in hp_sensitivity.groupby(
+                by=["group", "measure", "hp_name", "hp_value"]
+        ):
+            base = hp_sensitivity[
+                (hp_sensitivity["group"] == "base") &
+                (hp_sensitivity["measure"] == measure)
+            ]
+            # there should only be one row
             res = stats.ks_2samp(
-                self.density_groups["base"][0],
-                self.density_groups[group][0]
+                base["density"].iloc[0],
+                tmp["density"].iloc[0]
             )
             if res.pvalue < 0.05:
-                hp_dict = [elem[1] for elem in self.density_groups[group]]
-                for hp in hp_dict:
-                    for value in hp_dict[hp]:
-                        hp_sensitivity[hp][value] += 1
+                hp_sensitivity.loc[tmp.index, "marginal_hp_sensitivity"] = 1
+        for (group, hp_name, hp_value), tmp in hp_sensitivity.groupby(
+                by=["group", "hp_name", "hp_value"]
+        ):
+            hp_sensitivity.loc[
+                tmp.index, "hp_sensitivity"
+            ] = tmp["marginal_hp_sensitivity"].sum()
         return hp_sensitivity
 
     def coarse_analyze_density_sensitivity_cramervonmises_2samp(self):
         num_groups = len(self.hp_groups.keys())
         base_hyperparameters = self.hp_groups["base"][0]["hyperparameters"]
-        hp_sensitivity = {}
-        for group in self.density_groups:
-            for hp in self.density_groups[group][1]:
-                hp_sensitivity = {
-                    hp: {value: 0 for value in self.density_groups[group][1][hp]}
-                }
-        for group in self.density_groups:
-            if group == "base":
-                continue
+        hp_sensitivity = self.density_groups.copy()
+        hp_sensitivity["marginal_hp_sensitivity"] = 0
+        hp_sensitivity["hp_sensitivity"] = 0
+        for (_,measure,_,_), tmp in hp_sensitivity.groupby(
+                by=["group", "measure", "hp_name", "hp_value"]
+        ):
+            base = hp_sensitivity[
+                (hp_sensitivity["group"] == "base") &
+                (hp_sensitivity["measure"] == measure)
+            ]
+            # there should only be one row
             res = stats.cramervonmises_2samp(
-                self.density_groups["base"][0],
-                self.density_groups[group][0]
+                base["density"].iloc[0],
+                tmp["density"].iloc[0]
             )
             if res.pvalue < 0.05:
-                for hp in self.density_groups[group][1]:
-                    for value in self.density_groups[group][1][hp]:
-                        hp_sensitivity[hp][value] += 1
+                hp_sensitivity.loc[tmp.index, "marginal_hp_sensitivity"] = 1
+        for (group, hp_name, hp_value), tmp in hp_sensitivity.groupby(
+                by=["group", "hp_name", "hp_value"]
+        ):
+            hp_sensitivity.loc[
+                tmp.index, "hp_sensitivity"
+            ] = tmp["marginal_hp_sensitivity"].sum()
         return hp_sensitivity
-
+    
     def coarse_analyze_correlation_sensitivity(self):
         num_groups = len(self.hp_groups.keys())
         base_hyperparameters = self.hp_groups["base"][0]["hyperparameters"]
-        hp_sensitivity = {}
-        for group in self.corr_groups:
-            for hp in self.corr_groups[group][1]:
-                hp_sensitivity = {
-                    hp: {value: 0 for value in self.corr_groups[group][1][hp]}
-                }
-        for group in self.corr_groups:
-            if np.allclose(self.corr_groups[group][0], 0):
-                for hp in self.corr_groups[group][1]:
-                    for value in self.corr_groups[group][1][hp]:
-                        hp_sensitivity[hp][value] += 1
+        hp_sensitivity = self.corr_groups.copy()
+        hp_sensitivity["hp_sensitivity"] = 0
+        for _, tmp in hp_sensitivity.groupby(by=["hp_name", "hp_value", "measure"]):
+            indices = tmp[np.allclose(tmp["corr_diff"], 0)].index
+            if indices.empty:
+                continue
+            else:
+                hp_sensitivity[indices, "hp_sensitivity"] = len(indices)        
         return hp_sensitivity
 
-
     def coarse_analyze_model_based_sensitivity(self):
+        # need to fix this still.
+        # it's a mess and the hardest one to fix.
         num_groups = len(self.hp_groups.keys())
         base_hyperparameters = self.hp_groups["base"][0]["hyperparameters"]
         hp_sensitivity = {}
@@ -838,5 +878,5 @@ class AnalyzeClassificationMeasures:
                 for value in self.density_groups[group][1][hp]:
                     hp_sensitivity[hp][value] += density_value
         return hp_sensitivity  
-
+    # fix end
 
