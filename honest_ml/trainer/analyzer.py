@@ -115,7 +115,7 @@ class AnalyzeClassificationMeasures:
         self.fine_range = self.fine_analyze_range_sensitivity()
         self.fine_density_ks = self.fine_analyze_density_sensitivity_ks_2samp()
         self.fine_density_cramer_von_mises = self.fine_analyze_density_sensitivity_cramervonmises_2samp()
-        self.fine_corr = _self.fine_analyze_correlation_sensitivity()
+        self.fine_corr = self.fine_analyze_correlation_sensitivity()
         self.fine_model = self.fine_analyze_model_based_sensitivity()
         return {
             "fine_variance_sensitivity": self.fine_var,
@@ -306,29 +306,27 @@ class AnalyzeClassificationMeasures:
             self,
             model=LinearRegression()
     ):
-        # this is still broken.
-        # and will be the hardest to fix.
-        model_groups = {}
+        model_groups = pd.DataFrame()
         for group in self.hp_groups:
             if group == "base":
                 continue
-            model_groups[group] = []
             for measure in self.score_groups[group]:
                 y = np.array(self.score_groups["base"][measure])
                 x = np.array(self.score_groups[group][measure]).reshape(-1, 1)
-                try:
-                    X_train, X_test, y_train, y_test = train_test_split(
-                        x, y, test_size=0.1
-                    )
-                except:
-                    import code
-                    code.interact(local=locals())
+                X_train, X_test, y_train, y_test = train_test_split(
+                    x, y, test_size=0.1
+                )
                 model.fit(X_train, y_train)
                 y_pred = model.predict(X_test)
                 loss = mean_absolute_error(y_test, y_pred)
-                model_groups[group].append(
-                    (loss, self.group_diffs[group], group)
-                )
+                for hp in self.group_diffs[group]:
+                    model_groups = model_groups.append({
+                        "group": group,
+                        "measure": measure,
+                        "loss": loss,
+                        "hp_name": hp,
+                        "hp_value": self.group_diffs[group][hp]
+                    }, ignore_index=True)
         return model_groups
 
     # the stronger the correlation, the less sensitive the hyperparameter is
@@ -573,7 +571,7 @@ class AnalyzeClassificationMeasures:
             if indices.empty:
                 continue
             else:
-                hp_sensitivity[indices, "hp_sensitivity"] = len(indices)        
+                hp_sensitivity.loc[indices, "hp_sensitivity"] = len(indices)        
         return hp_sensitivity
 
     def coarse_analyze_concentration_sensitivity(self):
@@ -588,7 +586,7 @@ class AnalyzeClassificationMeasures:
             if indices.empty:
                 continue
             else:
-                hp_sensitivity[indices, "hp_sensitivity"] = len(indices)        
+                hp_sensitivity.loc[indices, "hp_sensitivity"] = len(indices)        
         return hp_sensitivity
 
     def coarse_analyze_iqr_sensitivity(self):
@@ -601,7 +599,7 @@ class AnalyzeClassificationMeasures:
             if indices.empty:
                 continue
             else:
-                hp_sensitivity[indices, "hp_sensitivity"] = len(indices)        
+                hp_sensitivity.loc[indices, "hp_sensitivity"] = len(indices)        
         return hp_sensitivity
 
     def coarse_analyze_range_sensitivity(self):
@@ -614,11 +612,11 @@ class AnalyzeClassificationMeasures:
             if indices.empty:
                 continue
             else:
-                hp_sensitivity[indices, "hp_sensitivity"] = len(indices)        
+                hp_sensitivity.loc[indices, "hp_sensitivity"] = len(indices)        
         return hp_sensitivity
 
     def coarse_analyze_density_sensitivity_ks_2samp(self):
-        num_groups = len(self.hp_groups.keys())a
+        num_groups = len(self.hp_groups.keys())
         base_hyperparameters = self.hp_groups["base"][0]["hyperparameters"]
         hp_sensitivity = self.density_groups.copy()
         hp_sensitivity["marginal_hp_sensitivity"] = 0
@@ -637,8 +635,8 @@ class AnalyzeClassificationMeasures:
             )
             if res.pvalue < 0.05:
                 hp_sensitivity.loc[tmp.index, "marginal_hp_sensitivity"] = 1
-        for (group, hp_name, hp_value), tmp in hp_sensitivity.groupby(
-                by=["group", "hp_name", "hp_value"]
+        for (measure, hp_name, hp_value), tmp in hp_sensitivity.groupby(
+                by=["measure", "hp_name", "hp_value"]
         ):
             hp_sensitivity.loc[
                 tmp.index, "hp_sensitivity"
@@ -665,8 +663,8 @@ class AnalyzeClassificationMeasures:
             )
             if res.pvalue < 0.05:
                 hp_sensitivity.loc[tmp.index, "marginal_hp_sensitivity"] = 1
-        for (group, hp_name, hp_value), tmp in hp_sensitivity.groupby(
-                by=["group", "hp_name", "hp_value"]
+        for (measure, hp_name, hp_value), tmp in hp_sensitivity.groupby(
+                by=["measure", "hp_name", "hp_value"]
         ):
             hp_sensitivity.loc[
                 tmp.index, "hp_sensitivity"
@@ -679,29 +677,29 @@ class AnalyzeClassificationMeasures:
         hp_sensitivity = self.corr_groups.copy()
         hp_sensitivity["hp_sensitivity"] = 0
         for _, tmp in hp_sensitivity.groupby(by=["hp_name", "hp_value", "measure"]):
-            indices = tmp[np.allclose(tmp["corr_diff"], 0)].index
+            indices = tmp[(
+                tmp["correlation"] < 0.2
+            ) & (
+                tmp["pvalue"] < 0.07
+            )].index
             if indices.empty:
                 continue
             else:
-                hp_sensitivity[indices, "hp_sensitivity"] = len(indices)        
+                hp_sensitivity.loc[indices, "hp_sensitivity"] = len(indices)
         return hp_sensitivity
 
     def coarse_analyze_model_based_sensitivity(self):
-        # need to fix this still.
-        # it's a mess and the hardest one to fix.
         num_groups = len(self.hp_groups.keys())
         base_hyperparameters = self.hp_groups["base"][0]["hyperparameters"]
-        hp_sensitivity = {}
-        for group in self.model_groups:
-            for hp in self.model_groups[group][1]:
-                hp_sensitivity = {
-                    hp: {value: 0 for value in self.model_groups[group][1][hp]}
-                }
-        for group in self.model_groups:
-            if self.model_groups[group][0] > 0.5:
-                for hp in self.model_groups[group][1]:
-                    for value in self.model_groups[group][1][hp]:
-                        hp_sensitivity[hp][value] += 1
+        hp_sensitivity = self.model_groups.copy()
+        hp_sensitivity["hp_sensitivity"] = 0
+        for _, tmp in hp_sensitivity.groupby(by=["hp_name", "hp_value", "measure"]):
+
+            indices = tmp[tmp["loss"] < 0.5].index
+            if indices.empty:
+                continue
+            else:
+                hp_sensitivity.loc[indices, "hp_sensitivity"] = len(indices)
         return hp_sensitivity
 
     def fine_analyze_correlation_sensitivity(self):
@@ -711,17 +709,16 @@ class AnalyzeClassificationMeasures:
         """
         num_groups = len(self.hp_groups.keys())
         base_hyperparameters = self.hp_groups["base"][0]["hyperparameters"]
-        hp_sensitivity = {}
-        for group in self.corr_groups:
-            for hp in self.corr_groups[group][1]:
-                hp_sensitivity = {
-                    hp: {value: 0 for value in self.corr_groups[group][1][hp]}
-                }
-        for group in self.corr_groups:
-            corr_value = self.corr_groups[group][0]
-            for hp in self.corr_groups[group][1]:
-                for value in self.corr_groups[group][1][hp]:
-                    hp_sensitivity[hp][value] += 1/corr_value
+        hp_sensitivity = self.corr_groups.copy()
+        hp_sensitivity["hp_sensitivity"] = 0
+        for _, tmp in hp_sensitivity.groupby(by=["hp_name", "hp_value", "measure"]):
+            indices = tmp.index
+            if indices.empty:
+                continue
+            else:
+                hp_sensitivity.loc[indices, "hp_sensitivity"] = 1/(
+                    tmp["correlation"].sum() + tmp["pvalue"].sum()
+                )
         return hp_sensitivity
 
     def fine_analyze_variance_sensitivity(self):
@@ -731,17 +728,14 @@ class AnalyzeClassificationMeasures:
         """
         num_groups = len(self.hp_groups.keys())
         base_hyperparameters = self.hp_groups["base"][0]["hyperparameters"]
-        hp_sensitivity = {}
-        for group in self.var_groups:
-            for hp in self.var_groups[group][1]:
-                hp_sensitivity = {
-                    hp: {value: 0 for value in self.var_groups[group][1][hp]}
-                }
-        for group in self.var_groups:
-            var_value = self.var_groups[group][0]
-            for hp in self.var_groups[group][1]:
-                for value in self.var_groups[group][1][hp]:
-                    hp_sensitivity[hp][value] += var_value
+        hp_sensitivity = self.var_groups.copy()
+        hp_sensitivity["hp_sensitivity"] = 0
+        for _, tmp in hp_sensitivity.groupby(by=["hp_name", "hp_value", "measure"]):
+            indices = tmp.index
+            if indices.empty:
+                continue
+            else:
+                hp_sensitivity.loc[indices, "hp_sensitivity"] = tmp["variance_diff"].sum()
         return hp_sensitivity
 
     def fine_analyze_concentration_sensitivity(self):
@@ -749,21 +743,17 @@ class AnalyzeClassificationMeasures:
         Bigger values imply greater sensitivity, in absolute terms
         the more experiments you run the bigger this number will be.
         """
-        
         num_groups = len(self.hp_groups.keys())
         base_hyperparameters = self.hp_groups["base"][0]["hyperparameters"]
-        hp_sensitivity = {}
-        for group in self.concentration_groups:
-            for hp in self.concentration_groups[group][1]:
-                hp_sensitivity = {
-                    hp: {value: 0 for value in self.concentration_groups[group][1][hp]}
-                }
-        for group in self.concentration_groups:
-            density_value = self.concentration_groups[group][0]
-            for hp in self.concentration_groups[group][1]:
-                for concentration_value in self.concentration_groups[group][1][hp]:
-                    hp_sensitivity[hp][value] += concentration_value
-        return hp_sensitivity
+        hp_sensitivity = self.concentration_groups.copy()
+        hp_sensitivity["hp_sensitivity"] = 0
+        for _, tmp in hp_sensitivity.groupby(by=["hp_name", "hp_value", "measure"]):
+            indices = tmp.index
+            if indices.empty:
+                continue
+            else:
+                hp_sensitivity.loc[indices, "hp_sensitivity"] = tmp["concentration_diff"].sum()
+        return hp_sensitivity        
 
     def fine_analyze_iqr_sensitivity(self):
         """
@@ -772,18 +762,15 @@ class AnalyzeClassificationMeasures:
         """
         num_groups = len(self.hp_groups.keys())
         base_hyperparameters = self.hp_groups["base"][0]["hyperparameters"]
-        hp_sensitivity = {}
-        for group in self.iqr_groups:
-            for hp in self.iqr_groups[group][1]:
-                hp_sensitivity = {
-                    hp: {value: 0 for value in self.iqr_groups[group][1][hp]}
-                }
-        for group in self.iqr_groups:
-            iqr_value = self.iqr_groups[group][0]
-            for hp in self.iqr_groups[group][1]:
-                for value in self.iqr_groups[group][1][hp]:
-                    hp_sensitivity[hp][value] += iqr_value
-        return hp_sensitivity
+        hp_sensitivity = self.iqr_groups.copy()
+        hp_sensitivity["hp_sensitivity"] = 0
+        for _, tmp in hp_sensitivity.groupby(by=["hp_name", "hp_value", "measure"]):
+            indices = tmp.index
+            if indices.empty:
+                continue
+            else:
+                hp_sensitivity.loc[indices, "hp_sensitivity"] = tmp["iqr_diff"].sum()
+        return hp_sensitivity        
 
     def fine_analyze_range_sensitivity(self):
         """
@@ -792,18 +779,15 @@ class AnalyzeClassificationMeasures:
         """
         num_groups = len(self.hp_groups.keys())
         base_hyperparameters = self.hp_groups["base"][0]["hyperparameters"]
-        hp_sensitivity = {}
-        for group in self.range_groups:
-            for hp in self.range_groups[group][1]:
-                hp_sensitivity = {
-                    hp: {value: 0 for value in self.range_groups[group][1][hp]}
-                }
-        for group in self.range_groups:
-            range_value = self.range_groups[group][0]
-            for hp in self.range_groups[group][1]:
-                for value in self.range_groups[group][1][hp]:
-                    hp_sensitivity[hp][value] += range_value
-        return hp_sensitivity
+        hp_sensitivity = self.range_groups.copy()
+        hp_sensitivity["hp_sensitivity"] = 0
+        for _, tmp in hp_sensitivity.groupby(by=["hp_name", "hp_value", "measure"]):
+            indices = tmp.index
+            if indices.empty:
+                continue
+            else:
+                hp_sensitivity.loc[indices, "hp_sensitivity"] = tmp["range_diff"].sum()
+        return hp_sensitivity        
 
     def fine_analyze_model_based_sensitivity(self):
         """
@@ -812,18 +796,15 @@ class AnalyzeClassificationMeasures:
         """
         num_groups = len(self.hp_groups.keys())
         base_hyperparameters = self.hp_groups["base"][0]["hyperparameters"]
-        hp_sensitivity = {}
-        for group in self.model_groups:
-            for hp in self.model_groups[group][1]:
-                hp_sensitivity = {
-                    hp: {value: 0 for value in self.model_groups[group][1][hp]}
-                }
-        for group in self.model_groups:
-            model_value = self.model_groups[group][0]
-            for hp in self.model_groups[group][1]:
-                for value in self.model_groups[group][1][hp]:
-                    hp_sensitivity[hp][value] += model_value
-        return hp_sensitivity    
+        hp_sensitivity = self.model_groups.copy()
+        hp_sensitivity["hp_sensitivity"] = 0
+        for _, tmp in hp_sensitivity.groupby(by=["hp_name", "hp_value", "measure"]):
+            indices = tmp.index
+            if indices.empty:
+                continue
+            else:
+                hp_sensitivity.loc[indices, "hp_sensitivity"] = tmp["loss"].sum()
+        return hp_sensitivity        
 
     def fine_analyze_density_sensitivity_ks_2samp(self):
         """
@@ -832,25 +813,29 @@ class AnalyzeClassificationMeasures:
         """
         num_groups = len(self.hp_groups.keys())
         base_hyperparameters = self.hp_groups["base"][0]["hyperparameters"]
-        hp_sensitivity = {}
-        for group in self.density_groups:
-            for hp in self.density_groups[group][1]:
-                hp_sensitivity = {
-                    hp: {value: 0 for value in self.density_groups[group][1][hp]}
-                }
-        for group in self.density_groups:
-            if group == "base":
-                continue
+        hp_sensitivity = self.density_groups.copy()
+        hp_sensitivity["marginal_hp_sensitivity"] = 0
+        hp_sensitivity["hp_sensitivity"] = 0
+        for (_,measure,_,_), tmp in hp_sensitivity.groupby(
+                by=["group", "measure", "hp_name", "hp_value"]
+        ):
+            base = hp_sensitivity[
+                (hp_sensitivity["group"] == "base") &
+                (hp_sensitivity["measure"] == measure)
+            ]
+            # there should only be one row
             res = stats.ks_2samp(
-                self.density_groups["base"][0],
-                self.density_groups[group][0]
+                base["density"].iloc[0],
+                tmp["density"].iloc[0]
             )
-
-            density_value = res.statistic
-            for hp in self.density_groups[group][1]:
-                for value in self.density_groups[group][1][hp]:
-                    hp_sensitivity[hp][value] += density_value
-        return hp_sensitivity    
+            hp_sensitivity.loc[tmp.index, "marginal_hp_sensitivity"] = res.statistic
+        for (measure, hp_name, hp_value), tmp in hp_sensitivity.groupby(
+                by=["measure", "hp_name", "hp_value"]
+        ):
+            hp_sensitivity.loc[
+                tmp.index, "hp_sensitivity"
+            ] = tmp["marginal_hp_sensitivity"].sum()
+        return hp_sensitivity
 
     def fine_analyze_density_sensitivity_cramervonmises_2samp(self):
         """
@@ -859,24 +844,27 @@ class AnalyzeClassificationMeasures:
         """
         num_groups = len(self.hp_groups.keys())
         base_hyperparameters = self.hp_groups["base"][0]["hyperparameters"]
-        hp_sensitivity = {}
-        for group in self.density_groups:
-            for hp in self.density_groups[group][1]:
-                hp_sensitivity = {
-                    hp: {value: 0 for value in self.density_groups[group][1][hp]}
-                }
-        for group in self.density_groups:
-            if group == "base":
-                continue
+        hp_sensitivity = self.density_groups.copy()
+        hp_sensitivity["marginal_hp_sensitivity"] = 0
+        hp_sensitivity["hp_sensitivity"] = 0
+        for (_,measure,_,_), tmp in hp_sensitivity.groupby(
+                by=["group", "measure", "hp_name", "hp_value"]
+        ):
+            base = hp_sensitivity[
+                (hp_sensitivity["group"] == "base") &
+                (hp_sensitivity["measure"] == measure)
+            ]
+            # there should only be one row
             res = stats.cramervonmises_2samp(
-                self.density_groups["base"][0],
-                self.density_groups[group][0]
+                base["density"].iloc[0],
+                tmp["density"].iloc[0]
             )
-
-            density_value = res.statistic
-            for hp in self.density_groups[group][1]:
-                for value in self.density_groups[group][1][hp]:
-                    hp_sensitivity[hp][value] += density_value
-        return hp_sensitivity  
-    # fix end
+            hp_sensitivity.loc[tmp.index, "marginal_hp_sensitivity"] = res.statistic
+        for (measure, hp_name, hp_value), tmp in hp_sensitivity.groupby(
+                by=["measure", "hp_name", "hp_value"]
+        ):
+            hp_sensitivity.loc[
+                tmp.index, "hp_sensitivity"
+            ] = tmp["marginal_hp_sensitivity"].sum()
+        return hp_sensitivity
 
