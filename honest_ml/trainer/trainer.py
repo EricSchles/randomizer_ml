@@ -596,7 +596,32 @@ class RegressionTrainer(BaseTrainer):
                     model.predict(X)
                 )
             return mean(predictions)
-            
+
+    def predict_ci(self, X, k=0.1, ensemble="all"):
+        """
+        ensemble options:
+        * all
+        * top_k_percent
+        """
+        predictions = []
+        if ensemble == "all":
+            for model_instance in self.model_instances:
+                model = model_instance[0]
+                predictions.append(
+                    model.predict(X)
+                )
+            return np.array(predictions)
+        elif ensemble == "top_k_pecent":
+            model_instances = sorted(
+                self.model_instances, key=lambda t: t[1]
+            )
+            end = int(len(model_instances) * k)
+            for i in range(end):
+                model = model_instances[i][0]
+                predictions.append(
+                    model.predict(X)
+                )
+            return np.array(predictions)
 
 class ClassificationTrainer(BaseTrainer):
     def _fit(self, seed, test_size, X, y, metric=None):
