@@ -597,7 +597,7 @@ class RegressionTrainer(BaseTrainer):
                 )
             return mean(predictions)
 
-    def predict_ci(self, X, k=0.1, ensemble="all"):
+    def predict_ci(self, X, k=0.1, ensemble="all", return_type="hist"):
         """
         ensemble options:
         * all
@@ -610,7 +610,16 @@ class RegressionTrainer(BaseTrainer):
                 predictions.append(
                     model.predict(X)
                 )
-            return np.array(predictions)
+            if return_type == "hist":
+                return np.array(predictions)
+            elif return_type == "percentile":
+                return [
+                    np.percentile(
+                        predictions,
+                        percent
+                    )
+                    for percent in [2.5, 50.0, 97.5]
+                ]
         elif ensemble == "top_k_pecent":
             model_instances = sorted(
                 self.model_instances, key=lambda t: t[1]
@@ -621,7 +630,8 @@ class RegressionTrainer(BaseTrainer):
                 predictions.append(
                     model.predict(X)
                 )
-            return np.array(predictions)
+            if return_type == "hist":
+                return np.array(predictions)
 
 class ClassificationTrainer(BaseTrainer):
     def _fit(self, seed, test_size, X, y, metric=None):
