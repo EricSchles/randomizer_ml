@@ -9,7 +9,7 @@ README = (HERE / "README.md").read_text()
 
 # This call to setup() does all the work
 setup(
-    name="honest_ml",
+    name="randomizer_ml",
     version="0.11.2",
     description="Training for models conforming to the scikit-learn api",
     long_description=README,
@@ -28,11 +28,11 @@ setup(
         "Programming Language :: Python :: 3.10"
     ],
     packages=[
-        "honest_ml",
-        'honest_ml.trainer',
-        'honest_ml.visualizer',
-        'honest_ml.experiment',
-        'honest_ml.utils'
+        "randomizer_ml",
+        'randomizer_ml.trainer',
+        'randomizer_ml.visualizer',
+        'randomizer_ml.experiment',
+        'randomizer_ml.utils'
     ],
     include_package_data=True,
     install_requires=["scikit-learn", "scipy", "numpy",
