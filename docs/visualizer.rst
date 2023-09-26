@@ -13,8 +13,8 @@ Example One::
 	import warnings
 	warnings.filterwarnings('ignore')
 
-	from honest_ml.visualizer import Visualizer
-	from honest_ml.trainer import EvaluateModel
+	from randomizer_ml.visualizer import Visualizer
+	from randomizer_ml.trainer import EvaluateModel
 	from sklearn.linear_model import LogisticRegression
 	from sklearn.datasets import make_classification
 	import pandas as pd
@@ -43,8 +43,8 @@ Example Two::
 	import warnings
 	warnings.filterwarnings('ignore')
 
-	from honest_ml.visualizer import Visualizer
-	from honest_ml.trainer import EvaluateModel
+	from randomizer_ml.visualizer import Visualizer
+	from randomizer_ml.trainer import EvaluateModel
 	from sklearn.linear_model import LogisticRegression
 	from sklearn.datasets import make_classification
 	import pandas as pd

@@ -21,7 +21,7 @@ Here is an example using EvaluateModel on a toy classification problem::
 	import warnings
 	warnings.filterwarnings('ignore')
 
-	from honest_ml.trainer import EvaluateModel
+	from randomizer_ml.trainer import EvaluateModel
 	from sklearn.linear_model import LogisticRegression
 	from sklearn.datasets import make_classification
 	import pandas as pd
@@ -99,7 +99,7 @@ Here is an example of model_instances::
 
 in the above example, model_instances is a list.  Each of the elements is a dictionary.  The key '0' is the zeroth class from the target variable.  And the key '1' is the first class from the target variable.  You can see the precision, recall and f1-scores for each class, as well as all the other standard measure you'd get from classification_report from scikit-learn.
 
-Additionally, you get the coefficients in coef.  As well as the hyperparameters used.  The loss functions are then visualized in honest_ml.visualizer.Visualizer.
+Additionally, you get the coefficients in coef.  As well as the hyperparameters used.  The loss functions are then visualized in randomizer_ml.visualizer.Visualizer.
 
 RegressionTrainer
 =================
@@ -110,7 +110,7 @@ To choose how to train, simply call the fit method with keyword argument trainin
 
 Example::
 
-	from honest_ml.trainer import RegressionTrainer
+	from randomizer_ml.trainer import RegressionTrainer
 	from sklearn.linear_model import LinearRegression
 	from sklearn.datasets import make_regression
 	import pandas as pd
@@ -156,7 +156,7 @@ Just as there is a regression specific trainer, there is a classification specif
 	import warnings
 	warnings.filterwarnings('ignore')
 
-	from honest_ml.trainer import ClassificationTrainer
+	from randomizer_ml.trainer import ClassificationTrainer
 	from sklearn.linear_model import LogisticRegression
 	from sklearn.datasets import make_classification
 	import pandas as pd
