@@ -1,7 +1,0 @@
-scikit-learn
-scipy
-numpy
-statsmodels
-mlxtend
-pytest
-seaborn

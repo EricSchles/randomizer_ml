@@ -14,7 +14,7 @@ setup(
     description="Training for models conforming to the scikit-learn api",
     long_description=README,
     long_description_content_type="text/markdown",
-    url="https://github.com/EricSchles/honest_ml",
+    url="https://github.com/EricSchles/randomizer_ml",
     author="Eric Schles",
     author_email="ericschles@gmail.com",
     license="MIT",
