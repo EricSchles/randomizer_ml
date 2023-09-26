@@ -1,6 +1,6 @@
-# Honest ML
+# Randomizer ML
 
-This library allows you to do honest-ML
+This library allows you to do randomizer-ML
 
 You can see a talk about this library 
 
