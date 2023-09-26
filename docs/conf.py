@@ -17,8 +17,8 @@
 
 # -- Project information -----------------------------------------------------
 
-project = 'honest_ml'
-copyright = '2022, Eric Schles'
+project = 'randomizer_ml'
+copyright = '2023, Eric Schles'
 author = 'Eric Schles'
 
 # The full version, including alpha/beta/rc tags

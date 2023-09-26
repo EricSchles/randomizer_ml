@@ -15,9 +15,9 @@ Here is an example using Experiment with a toy classification problem::
 	import warnings
 	warnings.filterwarnings('ignore')
 
-	from honest_ml.trainer import RegressionTrainer, ClassificationTrainer, EvaluateModel
-	from honest_ml.visualizer import Visualizer
-	from honest_ml.experiment import Experiment
+	from randomizer_ml.trainer import RegressionTrainer, ClassificationTrainer, EvaluateModel
+	from randomizer_ml.visualizer import Visualizer
+	from randomizer_ml.experiment import Experiment
 	from sklearn.linear_model import LinearRegression
 	from sklearn.datasets import make_regression
 	from sklearn.linear_model import LogisticRegression
